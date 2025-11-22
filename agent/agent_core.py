@@ -12,6 +12,7 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 MODEL_NAME = "gemini-2.0-flash"
 
+# basic behavior instructions for the model
 SYSTEM_INSTRUCTIONS = """
 You are a helpful Company Research Assistant and Account Plan Generator.
 
@@ -34,6 +35,7 @@ Always:
 - Encourage the user to refine or correct sections of the plan.
 """
 
+# keyword map for updating sections
 SECTION_KEYWORDS = {
     "overview": ["overview", "summary", "about the company", "intro"],
     "products_services": ["product", "service", "offerings", "solutions"],
@@ -46,9 +48,8 @@ SECTION_KEYWORDS = {
     "recommended_actions": ["recommendation", "action", "next step", "plan"]
 }
 
-
+# detect the section that user wants to change
 def detect_target_section(user_message: str) -> Optional[str]:
-
     lower_msg = user_message.lower()
     for section, keywords in SECTION_KEYWORDS.items():
         for kw in keywords:
@@ -56,19 +57,20 @@ def detect_target_section(user_message: str) -> Optional[str]:
                 return section
     return None
 
-
+# gemini model calling
 def call_gemini(prompt: str) -> str:
     model = genai.GenerativeModel(MODEL_NAME)
     response = model.generate_content(prompt)
     return response.text.strip() if response.text else ""
 
-
+# agent function
 def generate_agent_reply(
     user_message: str,
     company_name: str,
     current_plan: Optional[AccountPlan],
     chat_history: List[Dict[str, str]]) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
     
+    # creation of  initial plan if it is missing
     if current_plan is None:
         plan = AccountPlan.empty(company_name)
         research_data = mock_research_company(company_name)
@@ -96,8 +98,10 @@ def generate_agent_reply(
             "of that section and explain what changed."
         )
 
+    # see if user wants to edit a specific section
     target_section = detect_target_section(user_message)
 
+    # prepare short chat history
     history_text_parts = []
     for msg in chat_history[-6:]:
         role = msg.get("role", "user")
@@ -134,6 +138,7 @@ def generate_agent_reply(
 
     reply = call_gemini(prompt)
 
+    # updation of section if needed
     if target_section is not None:
         try:
             updated_prompt = f"""
@@ -166,6 +171,7 @@ def generate_agent_reply(
                   "You can ask again more specifically if needed.)"
             )
 
+    # chat memory updation
     new_history = chat_history + [
         {"role": "user", "content": user_message},
         {"role": "assistant", "content": reply},

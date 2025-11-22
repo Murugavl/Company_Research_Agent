@@ -1,5 +1,6 @@
 from typing import Dict, Any
 
+# simple placeholder research data
 def mock_research_company(company_name: str) -> Dict[str, Any]:
     """
     This is a temporary mock research tool.
