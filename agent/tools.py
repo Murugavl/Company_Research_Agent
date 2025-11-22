@@ -10,7 +10,6 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 TAVILY_KEY = os.getenv("TAVILY_API_KEY")
 
 
-# calling tavily search api
 def tavily_search(query: str) -> Any:
     url = "https://api.tavily.com/search"
     payload = {
@@ -23,7 +22,6 @@ def tavily_search(query: str) -> Any:
     return res.json()
 
 
-# convertion of tavily result into a structured research output
 def research_company(company_name: str) -> Dict[str, Any]:
     q = f"{company_name} company overview products services competitors financials market position"
     data = tavily_search(q)
@@ -31,14 +29,12 @@ def research_company(company_name: str) -> Dict[str, Any]:
     answer = data.get("answer", "")
     sources = data.get("results", [])
 
-    # basic structure for research data
     return {
         "raw_answer": answer,
         "sources": sources,
     }
 
 
-# take raw research text and turn it into structured plan sections
 def split_into_sections(raw_text: str) -> Dict[str, str]:
     prompt = f"""
 Split this company research into these sections:
@@ -56,6 +52,8 @@ Split this company research into these sections:
 For list-type fields (competitors, opportunities, risks, recommended_actions),
 use markdown bullet points (- ...), each on its own line.
 
+Do not return Python lists like ['A', 'B']. Return plain text strings.
+
 Return ONLY a JSON object with these keys.
 
 Raw text:
@@ -63,16 +61,19 @@ Raw text:
 """
     model = genai.GenerativeModel("gemini-2.0-flash")
     res = model.generate_content(prompt)
-    text = res.text.strip()
+    text = (res.text or "").strip()
 
     try:
         import json
+
         return json.loads(text)
-    except:
+    except Exception:
         try:
-            fixed = text.replace("```json", "").replace("```", "")
-            return json.loads(fixed)
-        except:
+            cleaned = text.replace("```json", "").replace("```", "")
+            import json
+
+            return json.loads(cleaned)
+        except Exception:
             return {
                 "overview": raw_text,
                 "products_services": "",
@@ -86,28 +87,35 @@ Raw text:
             }
 
 
-# fill missing or weak sections using gemini
 def complete_missing_sections(sections: Dict[str, str]) -> Dict[str, str]:
     prompt = f"""
-Given the partially filled company summary below, improve and complete any weak or empty sections.
-Keep the writing concise and business-oriented.
-Use bullet points where it makes sense.
+Here is a partially filled structured summary of a company:
 
-Sections:
 {sections}
+
+Task:
+- Improve and complete any weak or empty sections.
+- Make sure EVERY section has meaningful, non-empty content.
+- For list sections (competitors, opportunities, risks, recommended_actions),
+  use markdown bullet points (- ...), one per line.
+- Do not return Python arrays like ['item1', 'item2'].
+- Keep the tone detailed, clear, and business-focused. Avoid very short or generic sentences.
 
 Return ONLY valid JSON with the same keys.
 """
     model = genai.GenerativeModel("gemini-2.0-flash")
     res = model.generate_content(prompt)
-    text = res.text.strip()
+    text = (res.text or "").strip()
 
     try:
         import json
+
         return json.loads(text)
-    except:
+    except Exception:
         try:
             cleaned = text.replace("```json", "").replace("```", "")
+            import json
+
             return json.loads(cleaned)
-        except:
+        except Exception:
             return sections

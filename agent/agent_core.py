@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Tuple, Optional
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -12,21 +12,22 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 MODEL_NAME = "gemini-2.0-flash"
 
-# high-level behavior for the model
 SYSTEM_INSTRUCTIONS = """
 You are a company research assistant.
 
 Rules:
-- Answer naturally, do not mention any 'account plan' or internal sections.
+- Answer naturally and professionally. Do not mention any 'account plan' or internal sections.
 - Use a short 1–2 line intro, then markdown bullet points where helpful.
 - When the user asks to update a specific section (risks, opportunities, competitors, etc.),
   rewrite only that section and return just the updated text.
 - When the user asks general questions (culture, location, work style, etc.),
   answer directly using research and reasonable inference.
-- Keep the tone concise and business-focused.
+- Keep the tone concise, clear, and business-focused.
+- When generating or updating the structured view, ALWAYS fill every section
+  with meaningful, non-empty business content. Avoid very short or generic text.
 """
 
-SECTION_KEYWORDS = {
+SECTION_KEYWORDS: Dict[str, List[str]] = {
     "overview": ["overview", "summary", "about the company", "intro"],
     "products_services": ["product", "service", "offerings", "solutions"],
     "market_position": ["market", "position", "branding", "segment"],
@@ -41,30 +42,135 @@ SECTION_KEYWORDS = {
 UPDATE_KEYWORDS = ["update", "change", "edit", "modify", "rewrite", "revise"]
 
 
-# detect which section user is talking about
 def detect_target_section(user_message: str) -> Optional[str]:
-    lower_msg = user_message.lower()
-    for section, keywords in SECTION_KEYWORDS.items():
-        for kw in keywords:
-            if kw in lower_msg:
+    msg = user_message.lower()
+    for section, words in SECTION_KEYWORDS.items():
+        for w in words:
+            if w in msg:
                 return section
     return None
 
 
-# detect if user wants to update / rewrite something
 def is_update_intent(user_message: str) -> bool:
-    lower_msg = user_message.lower()
-    return any(word in lower_msg for word in UPDATE_KEYWORDS)
+    msg = user_message.lower()
+    return any(w in msg for w in UPDATE_KEYWORDS)
 
 
-# generic gemini call
 def call_gemini(prompt: str) -> str:
     model = genai.GenerativeModel(MODEL_NAME)
-    response = model.generate_content(prompt)
-    return response.text.strip() if response.text else ""
+    res = model.generate_content(prompt)
+    return res.text.strip() if res.text else ""
 
 
-# main agent function
+def normalize_company_name(raw_name: str) -> str:
+    raw_name = (raw_name or "").strip()
+    if not raw_name:
+        return raw_name
+
+    try:
+        prompt = (
+            "Correct this company name to its proper official capitalization and spacing. "
+            "Return only the corrected name, no extra words.\n\n"
+            f"Name: {raw_name}"
+        )
+        model = genai.GenerativeModel(MODEL_NAME)
+        res = model.generate_content(prompt)
+        name = (res.text or "").strip()
+        if name:
+            return name
+    except Exception:
+        pass
+
+    # fallback – simple title-case
+    return " ".join(word.capitalize() for word in raw_name.split())
+
+
+def _fallback_text(section: str, company_name: str) -> str:
+    c = company_name
+    if section == "overview":
+        return (
+            f"{c} is a recognised player in its industry, providing core products and services, "
+            f"serving a broad customer base, and focusing on innovation and operational efficiency."
+        )
+    if section == "products_services":
+        return (
+            f"{c} offers a portfolio of products and services that support its core customers. "
+            f"These typically include primary offerings, supporting tools or platforms, and related "
+            f"services such as consulting, support, or training."
+        )
+    if section == "market_position":
+        return (
+            f"{c} holds a competitive position in its market, with established brand recognition, "
+            f"a measurable share in key segments, and a value proposition that differentiates it from "
+            f"both traditional and emerging competitors."
+        )
+    if section == "competitors":
+        return (
+            "- Established companies offering similar products and services\n"
+            "- Regional or niche providers targeting the same customer needs\n"
+            "- New entrants leveraging technology or pricing to challenge incumbents"
+        )
+    if section == "financial_snapshot":
+        return (
+            f"{c} demonstrates a generally solid financial profile with diversified revenue streams, "
+            f"ongoing investment in growth areas, and performance that is influenced by broader market conditions."
+        )
+    if section == "key_contacts":
+        return (
+            "Key contacts usually include executive leadership (CEO, CFO, CTO), line-of-business heads, "
+            "and senior managers in HR, IT, and Procurement who influence or make purchasing decisions."
+        )
+    if section == "opportunities":
+        return (
+            "- Expand into new markets or customer segments\n"
+            "- Launch adjacent products or services\n"
+            "- Strengthen strategic partnerships and ecosystem relationships\n"
+            "- Use data and analytics to improve customer experience and retention"
+        )
+    if section == "risks":
+        return (
+            "- Strong competition from existing and emerging players\n"
+            "- Regulatory or compliance changes impacting operations\n"
+            "- Macroeconomic factors affecting customer budgets\n"
+            "- Technology shifts requiring continuous innovation and investment"
+        )
+    if section == "recommended_actions":
+        return (
+            f"- Engage {c} in strategic conversations around their current priorities and pain points\n"
+            f"- Demonstrate clear business value and ROI when proposing solutions\n"
+            f"- Build relationships with key stakeholders and decision-makers\n"
+            f"- Share relevant case studies, references, and proof-of-value examples"
+        )
+    return ""
+
+
+def ensure_all_sections_filled(sections: Dict[str, str], company_name: str) -> Dict[str, str]:
+    required_keys = [
+        "overview",
+        "products_services",
+        "market_position",
+        "competitors",
+        "financial_snapshot",
+        "key_contacts",
+        "opportunities",
+        "risks",
+        "recommended_actions",
+    ]
+    result: Dict[str, str] = {}
+
+    for key in required_keys:
+        value = sections.get(key, "")
+        text = str(value).strip() if value is not None else ""
+        lower = text.lower()
+
+        if not text or lower in {"none", "null", "n/a", "undefined"}:
+            text = _fallback_text(key, company_name)
+
+        result[key] = text
+
+    return result
+
+
 def generate_agent_reply(
     user_message: str,
     company_name: str,
@@ -72,7 +178,8 @@ def generate_agent_reply(
     chat_history: List[Dict[str, str]],
 ) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
 
-    # build initial plan if not yet present
+    company_name = normalize_company_name(company_name)
+
     if current_plan is None:
         plan = AccountPlan.empty(company_name)
         research = research_company(company_name)
@@ -80,6 +187,7 @@ def generate_agent_reply(
 
         sections = split_into_sections(raw_text)
         sections = complete_missing_sections(sections)
+        sections = ensure_all_sections_filled(sections, company_name)
 
         plan.overview = sections.get("overview", "")
         plan.products_services = sections.get("products_services", "")
@@ -98,21 +206,20 @@ def generate_agent_reply(
     target_section = detect_target_section(user_message)
     wants_update = is_update_intent(user_message)
 
-    # pack short history
-    history_text_parts = []
+    history_lines = []
     for msg in chat_history[-6:]:
         role = msg.get("role", "user")
         content = msg.get("content", "")
-        history_text_parts.append(f"{role.upper()}: {content}")
-    history_text = "\n".join(history_text_parts) if history_text_parts else ""
+        history_lines.append(f"{role.upper()}: {content}")
+    history_text = "\n".join(history_lines) if history_lines else ""
 
-    # branch: section update vs normal answer
     if target_section and wants_update:
-        # only rewrite that section and return it
-        update_prompt = f"""
+        section_prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 
-You are rewriting the '{target_section}' part for company: {company_name}.
+Company (use exactly this name in your answer): {company_name}
+
+You are rewriting the '{target_section}' part.
 
 Current text:
 {plan_dict.get(target_section, "")}
@@ -125,16 +232,15 @@ Task:
 - Use a short 1–2 line intro, then markdown bullet points.
 - Return ONLY the updated text for this section, nothing else.
 """
-        new_section_text = call_gemini(update_prompt).strip()
-        setattr(plan, target_section, new_section_text)
+        new_text = call_gemini(section_prompt).strip()
+        setattr(plan, target_section, new_text)
 
-        reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_section_text}"
+        reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_text}"
     else:
-        # normal question / general query
         prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 
-Company: {company_name}
+Company (use exactly this name in your answer): {company_name}
 
 Structured info:
 {plan_dict}
@@ -147,6 +253,7 @@ User message:
 
 Answer the user directly. Do not mention any 'account plan' or internal structures.
 Use a short intro, then bullet points where useful.
+Always refer to the company as: {company_name}.
 """
         reply = call_gemini(prompt)
 

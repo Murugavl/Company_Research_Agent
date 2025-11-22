@@ -4,7 +4,6 @@ from agent.agent_core import generate_agent_reply
 
 st.set_page_config(page_title="Company Research Assistant", layout="wide")
 
-# session
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
@@ -18,28 +17,62 @@ if "company" not in st.session_state:
 def guess_company_name(message: str, current: str) -> str:
     if current:
         return current
+
     text = message.strip()
     lower = text.lower()
+
     if "about" in lower:
         try:
-            after = text[lower.index("about") + len("about") :].strip(" :,-")
+            idx = lower.index("about") + len("about")
+            after = text[idx:].strip(" :,-")
             return after if after else text
-        except:
+        except Exception:
             return text
+
     return text
 
 
 def format_section_text(text):
-    if not text:
+    if text is None or text == "":
         return "_(empty)_"
 
-    # FIX: convert list to bullets
+    # if the model or tools gave a real list
     if isinstance(text, list):
-        return "\n".join(f"- {item}" for item in text)
+        cleaned_items = []
+        for item in text:
+            s = str(item).strip()
+            s = s.lstrip("-• ").strip()
+            if s:
+                cleaned_items.append(f"- {s}")
+        return "\n".join(cleaned_items) if cleaned_items else "_(empty)_"
 
-    t = text.strip()
+    t = str(text).strip()
 
-    # add bullet formatting if needed
+    # handle python-style list as string: "['A', 'B', 'C']"
+    if t.startswith("[") and t.endswith("]"):
+        try:
+            import ast
+
+            arr = ast.literal_eval(t)
+            if isinstance(arr, list):
+                cleaned_items = []
+                for item in arr:
+                    s = str(item).strip()
+                    s = s.lstrip("-• ").strip()
+                    if s:
+                        cleaned_items.append(f"- {s}")
+                if cleaned_items:
+                    return "\n".join(cleaned_items)
+        except Exception:
+            pass
+
+    # inline " - " separators -> bullets
+    if " - " in t and "\n" not in t:
+        parts = [p.strip() for p in t.split(" - ") if p.strip()]
+        if len(parts) > 1:
+            return "\n".join(f"- {p}" for p in parts)
+
+    # put numbered items on new lines if needed
     t = re.sub(r"\s+(\d\.)", r"\n\1", t)
 
     return t
@@ -50,20 +83,19 @@ st.title("💼 Company Research Assistant")
 with st.sidebar:
     st.header("Actions")
     if st.button("🔄 Reset Conversation"):
+        st.session_state.chat_history = []
         st.session_state.plan = None
         st.session_state.company = ""
-        st.session_state.chat_history = []
-        st.success("Restarted.")
+        st.success("Conversation and structured summary cleared.")
 
-# chat input
-msg = st.chat_input("Ask about any company...")
+user_msg = st.chat_input("Ask about any company...")
 
-if msg:
-    st.session_state.company = guess_company_name(msg, st.session_state.company)
+if user_msg:
+    st.session_state.company = guess_company_name(user_msg, st.session_state.company)
 
     with st.spinner("Working..."):
         reply, plan, history = generate_agent_reply(
-            user_message=msg,
+            user_message=user_msg,
             company_name=st.session_state.company,
             current_plan=st.session_state.plan,
             chat_history=st.session_state.chat_history,
@@ -71,29 +103,21 @@ if msg:
         st.session_state.plan = plan
         st.session_state.chat_history = history
 
-# chat messages
 for m in st.session_state.chat_history:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
 
-# always show structured plan (like before)
 if st.session_state.plan:
-    st.subheader("📄 Structured Summary")
-    d = st.session_state.plan.to_dict()
+    st.markdown("---")
+    st.markdown("### 📄 Structured Summary")
 
-    for sec, val in d.items():
-        with st.container():
-            st.markdown(
-                f"""
-                <div style="
-                    padding: 15px;
-                    margin-bottom: 15px;
-                    border-radius: 12px;
-                    border: 1px solid rgba(0,0,0,0.1);
-                ">
-                    <h4>{sec.replace('_',' ').title()}</h4>
-                    <p>{format_section_text(val)}</p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    data = st.session_state.plan.to_dict()
+
+    for key, value in data.items():
+        if key.lower() == "company_name":
+            continue
+
+        title = key.replace("_", " ").title()
+        st.markdown(f"**{title}**")
+        st.markdown(format_section_text(value))
+        st.markdown("")  # small spacing
