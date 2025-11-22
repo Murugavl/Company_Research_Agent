@@ -5,7 +5,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 from .account_plan import AccountPlan
-from .tools import research_company
+from .tools import research_company, split_into_sections
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -76,15 +76,19 @@ def generate_agent_reply(
         research = research_company(company_name)
         raw_text = research.get("raw_answer", "")
 
-        plan.overview = raw_text
-        plan.products_services = raw_text
-        plan.market_position = raw_text
-        plan.competitors = raw_text
-        plan.financial_snapshot = raw_text
-        plan.key_contacts = raw_text
-        plan.opportunities = raw_text
-        plan.risks = raw_text
-        plan.recommended_actions = raw_text
+        sections = split_into_sections(raw_text)
+
+        # fill plan with structured sections
+        plan.overview = sections.get("overview", "")
+        plan.products_services = sections.get("products_services", "")
+        plan.market_position = sections.get("market_position", "")
+        plan.competitors = sections.get("competitors", "")
+        plan.financial_snapshot = sections.get("financial_snapshot", "")
+        plan.key_contacts = sections.get("key_contacts", "")
+        plan.opportunities = sections.get("opportunities", "")
+        plan.risks = sections.get("risks", "")
+        plan.recommended_actions = sections.get("recommended_actions", "")
+
 
         system_note = (
             "Note: I have just generated an initial account plan for this company "

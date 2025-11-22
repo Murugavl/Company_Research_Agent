@@ -1,9 +1,11 @@
 import os
 import requests
 from typing import Dict, Any
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 TAVILY_KEY = os.getenv("TAVILY_API_KEY")
 
 # calling tavily search api
@@ -31,3 +33,51 @@ def research_company(company_name: str) -> Dict[str, Any]:
         "raw_answer": answer,
         "sources": sources
     }
+
+# take raw research text and turn it into structured plan sections
+def split_into_sections(raw_text: str) -> Dict[str, str]:
+    prompt = f"""
+                Split this company research into these sections:
+
+                - overview
+                - products_services
+                - market_position
+                - competitors
+                - financial_snapshot
+                - key_contacts
+                - opportunities
+                - risks
+                - recommended_actions
+
+                Return ONLY a JSON object with these keys.
+
+                Raw text:
+                {raw_text}
+            """
+
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    res = model.generate_content(prompt)
+    text = res.text.strip()
+
+    # basic json cleanup if model adds formatting
+    try:
+        import json
+        return json.loads(text)
+    except:
+        # if model returns slightly messy JSON, try fixing common issues
+        try:
+            fixed = text.replace("```json", "").replace("```", "")
+            return json.loads(fixed)
+        except:
+            # fallback: put raw text in overview only
+            return {
+                "overview": raw_text,
+                "products_services": "",
+                "market_position": "",
+                "competitors": "",
+                "financial_snapshot": "",
+                "key_contacts": "",
+                "opportunities": "",
+                "risks": "",
+                "recommended_actions": ""
+            }
