@@ -74,9 +74,6 @@ def format_section_text(text, section_name=None):
         
         return "\n".join(items)
 
-    # The rest of your current function remains unchanged
-    # (bullet rules, paragraph rules, etc.)
-
     bullet_sections = {
         "competitors",
         "opportunities",
