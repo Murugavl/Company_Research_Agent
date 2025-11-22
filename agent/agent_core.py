@@ -47,11 +47,8 @@ SECTION_KEYWORDS = {
 }
 
 
-def _detect_target_section(user_message: str) -> Optional[str]:
-    """
-    Very simple heuristic to guess which section the user wants to update.
-    This is NOT perfect, but good enough as a first intelligent behaviour.
-    """
+def detect_target_section(user_message: str) -> Optional[str]:
+
     lower_msg = user_message.lower()
     for section, keywords in SECTION_KEYWORDS.items():
         for kw in keywords:
@@ -60,7 +57,7 @@ def _detect_target_section(user_message: str) -> Optional[str]:
     return None
 
 
-def _call_gemini(prompt: str) -> str:
+def call_gemini(prompt: str) -> str:
     model = genai.GenerativeModel(MODEL_NAME)
     response = model.generate_content(prompt)
     return response.text.strip() if response.text else ""
@@ -70,21 +67,8 @@ def generate_agent_reply(
     user_message: str,
     company_name: str,
     current_plan: Optional[AccountPlan],
-    chat_history: List[Dict[str, str]]
-) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
-    """
-    Main entry point for the agent.
-
-    - If no account plan exists, we create one using mock_research_company().
-    - Then we build a prompt that includes:
-        * system instructions
-        * current account plan
-        * recent chat history
-        * the new user message
-    - We let Gemini generate a natural language reply.
-    - We also support a simple mechanism to update one section of the plan when
-      the user clearly indicates they want to change something.
-    """
+    chat_history: List[Dict[str, str]]) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
+    
     if current_plan is None:
         plan = AccountPlan.empty(company_name)
         research_data = mock_research_company(company_name)
@@ -112,59 +96,60 @@ def generate_agent_reply(
             "of that section and explain what changed."
         )
 
-    target_section = _detect_target_section(user_message)
+    target_section = detect_target_section(user_message)
 
     history_text_parts = []
     for msg in chat_history[-6:]:
         role = msg.get("role", "user")
         content = msg.get("content", "")
         history_text_parts.append(f"{role.upper()}: {content}")
+
     history_text = "\n".join(history_text_parts) if history_text_parts else "No previous conversation."
 
     plan_dict = plan.to_dict()
 
     prompt = f"""
-SYSTEM INSTRUCTIONS:
-{SYSTEM_INSTRUCTIONS}
+                SYSTEM INSTRUCTIONS:
+                {SYSTEM_INSTRUCTIONS}
 
-ADDITIONAL SYSTEM NOTE:
-{system_note}
+                ADDITIONAL SYSTEM NOTE:
+                {system_note}
 
-COMPANY NAME:
-{company_name}
+                COMPANY NAME:
+                {company_name}
 
-CURRENT ACCOUNT PLAN (JSON-like):
-{plan_dict}
+                CURRENT ACCOUNT PLAN (JSON-like):
+                {plan_dict}
 
-CONVERSATION HISTORY (most recent messages):
-{history_text}
+                CONVERSATION HISTORY (most recent messages):
+                {history_text}
 
-USER MESSAGE:
-{user_message}
+                USER MESSAGE:
+                {user_message}
 
-If the user seems to be asking to update or rewrite a specific section, focus on that section.
-Always answer in a clear, structured way. If you are updating a section, clearly state which
-section you are updating and provide the new suggested text for that section.
-"""
+                If the user seems to be asking to update or rewrite a specific section, focus on that section.
+                Always answer in a clear, structured way. If you are updating a section, clearly state which
+                section you are updating and provide the new suggested text for that section.
+                """
 
-    reply = _call_gemini(prompt)
+    reply = call_gemini(prompt)
 
     if target_section is not None:
         try:
             updated_prompt = f"""
-You are updating the '{target_section}' section of this account plan.
+                                You are updating the '{target_section}' section of this account plan.
 
-CURRENT SECTION TEXT:
-{plan_dict.get(target_section, "")}
+                                CURRENT SECTION TEXT:
+                                {plan_dict.get(target_section, "")}
 
-USER REQUEST:
-{user_message}
+                                USER REQUEST:
+                                {user_message}
 
-TASK:
-Rewrite ONLY the '{target_section}' section in a clear, business-friendly way that
-respects the user's request. Return ONLY the new text for that section, nothing else.
-"""
-            new_section_text = _call_gemini(updated_prompt)
+                                TASK:
+                                Rewrite ONLY the '{target_section}' section in a clear, business-friendly way that
+                                respects the user's request. Return ONLY the new text for that section, nothing else.
+                                """
+            new_section_text = call_gemini(updated_prompt)
 
             setattr(plan, target_section, new_section_text.strip())
 
