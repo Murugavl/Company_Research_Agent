@@ -5,7 +5,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 from .account_plan import AccountPlan
-from .tools import mock_research_company
+from .tools import research_company
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -73,17 +73,18 @@ def generate_agent_reply(
     # creation of  initial plan if it is missing
     if current_plan is None:
         plan = AccountPlan.empty(company_name)
-        research_data = mock_research_company(company_name)
+        research = research_company(company_name)
+        raw_text = research.get("raw_answer", "")
 
-        plan.overview = research_data["overview"]
-        plan.products_services = research_data["products_services"]
-        plan.market_position = research_data["market_position"]
-        plan.competitors = research_data["competitors"]
-        plan.financial_snapshot = research_data["financial_snapshot"]
-        plan.key_contacts = research_data["key_contacts"]
-        plan.opportunities = research_data["opportunities"]
-        plan.risks = research_data["risks"]
-        plan.recommended_actions = research_data["recommended_actions"]
+        plan.overview = raw_text
+        plan.products_services = raw_text
+        plan.market_position = raw_text
+        plan.competitors = raw_text
+        plan.financial_snapshot = raw_text
+        plan.key_contacts = raw_text
+        plan.opportunities = raw_text
+        plan.risks = raw_text
+        plan.recommended_actions = raw_text
 
         system_note = (
             "Note: I have just generated an initial account plan for this company "
