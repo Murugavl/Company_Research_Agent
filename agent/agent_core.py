@@ -81,66 +81,82 @@ def normalize_company_name(raw_name: str) -> str:
     except Exception:
         pass
 
-    # fallback – simple title-case
     return " ".join(word.capitalize() for word in raw_name.split())
 
 
 def _fallback_text(section: str, company_name: str) -> str:
     c = company_name
+
     if section == "overview":
         return (
-            f"{c} is a recognised player in its industry, providing core products and services, "
-            f"serving a broad customer base, and focusing on innovation and operational efficiency."
+            f"{c} is a major player in its industry, offering a wide range of solutions and operating "
+            f"across multiple markets. The company serves a large global customer base and has a workforce "
+            f"that typically falls within broad reported ranges (employee counts often vary by source). "
+            f"It continues to expand its capabilities through new technology, strategic investments, and "
+            f"improvements in operational efficiency. {c} maintains a strong presence in its sector by "
+            f"focusing on innovation, customer reach, and long-term growth opportunities."
         )
+
     if section == "products_services":
         return (
-            f"{c} offers a portfolio of products and services that support its core customers. "
-            f"These typically include primary offerings, supporting tools or platforms, and related "
-            f"services such as consulting, support, or training."
+            "- Core Products & Platforms: Primary offerings used by the majority of customers.\n"
+            "- Cloud & Enterprise Services: Hosted platforms, tools, and business solutions.\n"
+            "- Software & Applications: Consumer and enterprise apps that support daily operations.\n"
+            "- Hardware & Devices: Physical products that extend the software ecosystem.\n"
+            "- AI & Analytics: Data-driven tools, automation systems, and machine-learning capabilities."
         )
+
     if section == "market_position":
         return (
             f"{c} holds a competitive position in its market, with established brand recognition, "
-            f"a measurable share in key segments, and a value proposition that differentiates it from "
-            f"both traditional and emerging competitors."
+            f"presence across key industry segments, and differentiation through technology, quality, "
+            f"or customer reach."
         )
+
     if section == "competitors":
         return (
             "- Established companies offering similar products and services\n"
-            "- Regional or niche providers targeting the same customer needs\n"
-            "- New entrants leveraging technology or pricing to challenge incumbents"
+            "- Regional or niche providers addressing specific market needs\n"
+            "- Emerging players leveraging technology or pricing to compete"
         )
+
     if section == "financial_snapshot":
         return (
-            f"{c} demonstrates a generally solid financial profile with diversified revenue streams, "
-            f"ongoing investment in growth areas, and performance that is influenced by broader market conditions."
+            f"{c} demonstrates a generally strong financial profile, with diversified revenue sources, "
+            f"investment in strategic growth areas, and financial results influenced by broader "
+            f"market and economic conditions."
         )
+
     if section == "key_contacts":
         return (
-            "Key contacts usually include executive leadership (CEO, CFO, CTO), line-of-business heads, "
-            "and senior managers in HR, IT, and Procurement who influence or make purchasing decisions."
+            "Key contacts typically include executive leadership (CEO, CFO, CTO), business unit heads, "
+            "and decision-makers in HR, IT, Finance, and Procurement."
         )
+
     if section == "opportunities":
         return (
-            "- Expand into new markets or customer segments\n"
-            "- Launch adjacent products or services\n"
-            "- Strengthen strategic partnerships and ecosystem relationships\n"
-            "- Use data and analytics to improve customer experience and retention"
+            "- Enter new geographical or industry markets\n"
+            "- Expand product or service portfolio\n"
+            "- Strengthen ecosystem partnerships\n"
+            "- Increase automation and data-driven decision-making"
         )
+
     if section == "risks":
         return (
-            "- Strong competition from existing and emerging players\n"
-            "- Regulatory or compliance changes impacting operations\n"
-            "- Macroeconomic factors affecting customer budgets\n"
-            "- Technology shifts requiring continuous innovation and investment"
+            "- Competition from established and emerging players\n"
+            "- Regulatory or compliance challenges\n"
+            "- Market uncertainty impacting customer budgets\n"
+            "- Rapid technology changes requiring ongoing innovation"
         )
+
     if section == "recommended_actions":
         return (
-            f"- Engage {c} in strategic conversations around their current priorities and pain points\n"
-            f"- Demonstrate clear business value and ROI when proposing solutions\n"
-            f"- Build relationships with key stakeholders and decision-makers\n"
-            f"- Share relevant case studies, references, and proof-of-value examples"
+            f"- Engage {c} in strategic discussions about key priorities\n"
+            f"- Demonstrate ROI and clear business value\n"
+            f"- Build and maintain relationships with decision-makers\n"
+            f"- Provide case studies and success examples"
         )
+
     return ""
 
 
@@ -156,16 +172,14 @@ def ensure_all_sections_filled(sections: Dict[str, str], company_name: str) -> D
         "risks",
         "recommended_actions",
     ]
-    result: Dict[str, str] = {}
+
+    result = {}
 
     for key in required_keys:
         value = sections.get(key, "")
-        text = str(value).strip() if value is not None else ""
-        lower = text.lower()
-
-        if not text or lower in {"none", "null", "n/a", "undefined"}:
+        text = str(value).strip() if value else ""
+        if not text or text.lower() in {"none", "null", "undefined"}:
             text = _fallback_text(key, company_name)
-
         result[key] = text
 
     return result
@@ -182,6 +196,7 @@ def generate_agent_reply(
 
     if current_plan is None:
         plan = AccountPlan.empty(company_name)
+
         research = research_company(company_name)
         raw_text = research.get("raw_answer", "")
 
@@ -198,6 +213,7 @@ def generate_agent_reply(
         plan.opportunities = sections.get("opportunities", "")
         plan.risks = sections.get("risks", "")
         plan.recommended_actions = sections.get("recommended_actions", "")
+
     else:
         plan = current_plan
 
@@ -206,41 +222,38 @@ def generate_agent_reply(
     target_section = detect_target_section(user_message)
     wants_update = is_update_intent(user_message)
 
-    history_lines = []
-    for msg in chat_history[-6:]:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        history_lines.append(f"{role.upper()}: {content}")
-    history_text = "\n".join(history_lines) if history_lines else ""
+    history_lines = [
+        f"{m.get('role','').upper()}: {m.get('content','')}"
+        for m in chat_history[-6:]
+    ]
+    history_text = "\n".join(history_lines)
 
     if target_section and wants_update:
         section_prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 
-Company (use exactly this name in your answer): {company_name}
+Rewrite ONLY the '{target_section}' section.
 
-You are rewriting the '{target_section}' part.
+Company: {company_name}
 
 Current text:
-{plan_dict.get(target_section, "")}
+{plan_dict.get(target_section)}
 
 User request:
 {user_message}
 
-Task:
-- Rewrite only this section.
-- Use a short 1–2 line intro, then markdown bullet points.
-- Return ONLY the updated text for this section, nothing else.
+Return ONLY the updated text.
 """
         new_text = call_gemini(section_prompt).strip()
         setattr(plan, target_section, new_text)
 
         reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_text}"
+
     else:
         prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 
-Company (use exactly this name in your answer): {company_name}
+Company: {company_name}
 
 Structured info:
 {plan_dict}
@@ -251,9 +264,7 @@ Recent conversation:
 User message:
 {user_message}
 
-Answer the user directly. Do not mention any 'account plan' or internal structures.
-Use a short intro, then bullet points where useful.
-Always refer to the company as: {company_name}.
+Answer naturally and directly. Do not mention internal structures.
 """
         reply = call_gemini(prompt)
 

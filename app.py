@@ -32,50 +32,84 @@ def guess_company_name(message: str, current: str) -> str:
     return text
 
 
-def format_section_text(text):
-    if text is None or text == "":
+def format_section_text(text, section_name=None):
+    if not text:
         return "_(empty)_"
 
-    # if the model or tools gave a real list
+    raw = str(text).strip()
+
+    # Special formatting for Products & Services (Category → Items)
+    if section_name == "products_services":
+        items = []
+
+        # If model returned a Python list
+        if isinstance(text, list):
+            for entry in text:
+                entry = str(entry).strip().replace("\n", ", ")
+                if "→" in entry:
+                    items.append(entry)
+                else:
+                    parts = entry.split(":", 1)
+                    if len(parts) == 2:
+                        cat = parts[0].strip()
+                        vals = parts[1].strip()
+                        items.append(f"{cat} → {vals}")
+        else:
+            # If it's a dict-like string: "{'A':'x','B':'y'}"
+            if raw.startswith("{") and raw.endswith("}"):
+                cleaned = raw.strip("{}")
+                for pair in cleaned.split("' '"):
+                    pair = pair.replace("{", "").replace("}", "").replace("'", "")
+                    if ":" in pair:
+                        cat, vals = pair.split(":", 1)
+                        items.append(f"{cat.strip()} → {vals.strip().replace(',', ', ')}")
+            else:
+                # fallback: each line "Category: values"
+                lines = raw.split("\n")
+                for line in lines:
+                    if ":" in line:
+                        cat, vals = line.split(":", 1)
+                        vals = vals.replace("\n", ", ").strip()
+                        items.append(f"{cat.strip()} → {vals}")
+        
+        return "\n".join(items)
+
+    # The rest of your current function remains unchanged
+    # (bullet rules, paragraph rules, etc.)
+
+    bullet_sections = {
+        "competitors",
+        "opportunities",
+        "risks",
+        "recommended_actions"
+    }
+
+    def cap(s):
+        return s[0].upper() + s[1:] if s else s
+
+    if section_name not in bullet_sections:
+        cleaned = cap(raw.replace("\n", " ").strip())
+        return cleaned
+
+    items = []
     if isinstance(text, list):
-        cleaned_items = []
-        for item in text:
-            s = str(item).strip()
-            s = s.lstrip("-• ").strip()
+        for i in text:
+            s = str(i).strip().lstrip("-• ").strip()
             if s:
-                cleaned_items.append(f"- {s}")
-        return "\n".join(cleaned_items) if cleaned_items else "_(empty)_"
+                items.append(f"- {cap(s)}")
+        return "\n".join(items)
 
-    t = str(text).strip()
-
-    # handle python-style list as string: "['A', 'B', 'C']"
-    if t.startswith("[") and t.endswith("]"):
-        try:
-            import ast
-
-            arr = ast.literal_eval(t)
-            if isinstance(arr, list):
-                cleaned_items = []
-                for item in arr:
-                    s = str(item).strip()
-                    s = s.lstrip("-• ").strip()
-                    if s:
-                        cleaned_items.append(f"- {s}")
-                if cleaned_items:
-                    return "\n".join(cleaned_items)
-        except Exception:
-            pass
-
-    # inline " - " separators -> bullets
-    if " - " in t and "\n" not in t:
-        parts = [p.strip() for p in t.split(" - ") if p.strip()]
+    if "," in raw and "\n" not in raw:
+        parts = [p.strip() for p in raw.split(",") if p.strip()]
         if len(parts) > 1:
-            return "\n".join(f"- {p}" for p in parts)
+            return "\n".join(f"- {cap(p)}" for p in parts)
 
-    # put numbered items on new lines if needed
-    t = re.sub(r"\s+(\d\.)", r"\n\1", t)
+    if "\n" in raw:
+        lines = [l.strip().lstrip("-• ").strip() for l in raw.split("\n") if l.strip()]
+        if len(lines) > 1:
+            return "\n".join(f"- {cap(l)}" for l in lines)
 
-    return t
+    return f"- {cap(raw)}"
 
 
 st.title("💼 Company Research Assistant")
@@ -119,5 +153,5 @@ if st.session_state.plan:
 
         title = key.replace("_", " ").title()
         st.markdown(f"**{title}**")
-        st.markdown(format_section_text(value))
-        st.markdown("")  # small spacing
+        st.markdown(format_section_text(value, key))
+        st.markdown("")
