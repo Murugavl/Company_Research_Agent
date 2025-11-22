@@ -5,37 +5,27 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 from .account_plan import AccountPlan
-from .tools import *
+from .tools import research_company, split_into_sections, complete_missing_sections
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 MODEL_NAME = "gemini-2.0-flash"
 
-# basic behavior instructions for the model
+# high-level behavior for the model
 SYSTEM_INSTRUCTIONS = """
-You are a helpful Company Research Assistant and Account Plan Generator.
+You are a company research assistant.
 
-Your goals:
-1. Help the user research a specific company through natural, friendly conversation.
-2. Use the available account plan data to give structured, business-relevant answers.
-3. When the plan is empty or incomplete, assume that a separate research tool has already
-   collected basic information and populated the plan.
-4. If information might be uncertain, outdated, or conflicting, explicitly say that and
-   ask the user if you should dig deeper or focus on a specific area.
-5. Allow the user to update specific sections of the account plan through natural language.
-   For example: "update the risks section" or "rewrite the opportunities focusing on AI".
-6. Keep your tone professional but conversational, like a smart business analyst.
-7. If the user goes off-topic or asks for something beyond your capabilities, gently
-   explain the limitation and steer the conversation back to company research.
-
-Always:
-- Refer to the current account plan when answering.
-- Be transparent when you are making reasonable assumptions.
-- Encourage the user to refine or correct sections of the plan.
+Rules:
+- Answer naturally, do not mention any 'account plan' or internal sections.
+- Use a short 1–2 line intro, then markdown bullet points where helpful.
+- When the user asks to update a specific section (risks, opportunities, competitors, etc.),
+  rewrite only that section and return just the updated text.
+- When the user asks general questions (culture, location, work style, etc.),
+  answer directly using research and reasonable inference.
+- Keep the tone concise and business-focused.
 """
 
-# keyword map for updating sections
 SECTION_KEYWORDS = {
     "overview": ["overview", "summary", "about the company", "intro"],
     "products_services": ["product", "service", "offerings", "solutions"],
@@ -45,10 +35,13 @@ SECTION_KEYWORDS = {
     "key_contacts": ["contact", "person", "stakeholder", "decision maker"],
     "opportunities": ["opportunity", "growth", "expansion", "upside"],
     "risks": ["risk", "challenge", "threat", "downside"],
-    "recommended_actions": ["recommendation", "action", "next step", "plan"]
+    "recommended_actions": ["recommendation", "action", "next step", "plan"],
 }
 
-# detect the section that user wants to change
+UPDATE_KEYWORDS = ["update", "change", "edit", "modify", "rewrite", "revise"]
+
+
+# detect which section user is talking about
 def detect_target_section(user_message: str) -> Optional[str]:
     lower_msg = user_message.lower()
     for section, keywords in SECTION_KEYWORDS.items():
@@ -57,20 +50,29 @@ def detect_target_section(user_message: str) -> Optional[str]:
                 return section
     return None
 
-# gemini model calling
+
+# detect if user wants to update / rewrite something
+def is_update_intent(user_message: str) -> bool:
+    lower_msg = user_message.lower()
+    return any(word in lower_msg for word in UPDATE_KEYWORDS)
+
+
+# generic gemini call
 def call_gemini(prompt: str) -> str:
     model = genai.GenerativeModel(MODEL_NAME)
     response = model.generate_content(prompt)
     return response.text.strip() if response.text else ""
 
-# agent function
+
+# main agent function
 def generate_agent_reply(
     user_message: str,
     company_name: str,
     current_plan: Optional[AccountPlan],
-    chat_history: List[Dict[str, str]]) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
-    
-    # creation of  initial plan if it is missing
+    chat_history: List[Dict[str, str]],
+) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
+
+    # build initial plan if not yet present
     if current_plan is None:
         plan = AccountPlan.empty(company_name)
         research = research_company(company_name)
@@ -79,7 +81,6 @@ def generate_agent_reply(
         sections = split_into_sections(raw_text)
         sections = complete_missing_sections(sections)
 
-        # fill plan with structured sections
         plan.overview = sections.get("overview", "")
         plan.products_services = sections.get("products_services", "")
         plan.market_position = sections.get("market_position", "")
@@ -89,95 +90,66 @@ def generate_agent_reply(
         plan.opportunities = sections.get("opportunities", "")
         plan.risks = sections.get("risks", "")
         plan.recommended_actions = sections.get("recommended_actions", "")
-
-
-        system_note = (
-            "Note: I have just generated an initial account plan for this company "
-            "based on mock research data. Explain the key insights and tell the "
-            "user they can ask to refine or update any specific section."
-        )
     else:
         plan = current_plan
-        system_note = (
-            "Note: An account plan already exists. Use it to answer the user and, "
-            "if they ask to change a specific section, propose a refined version "
-            "of that section and explain what changed."
-        )
 
-    # see if user wants to edit a specific section
+    plan_dict = plan.to_dict()
+
     target_section = detect_target_section(user_message)
+    wants_update = is_update_intent(user_message)
 
-    # prepare short chat history
+    # pack short history
     history_text_parts = []
     for msg in chat_history[-6:]:
         role = msg.get("role", "user")
         content = msg.get("content", "")
         history_text_parts.append(f"{role.upper()}: {content}")
+    history_text = "\n".join(history_text_parts) if history_text_parts else ""
 
-    history_text = "\n".join(history_text_parts) if history_text_parts else "No previous conversation."
+    # branch: section update vs normal answer
+    if target_section and wants_update:
+        # only rewrite that section and return it
+        update_prompt = f"""
+{SYSTEM_INSTRUCTIONS}
 
-    plan_dict = plan.to_dict()
+You are rewriting the '{target_section}' part for company: {company_name}.
 
-    prompt = f"""
-                SYSTEM INSTRUCTIONS:
-                {SYSTEM_INSTRUCTIONS}
+Current text:
+{plan_dict.get(target_section, "")}
 
-                ADDITIONAL SYSTEM NOTE:
-                {system_note}
+User request:
+{user_message}
 
-                COMPANY NAME:
-                {company_name}
+Task:
+- Rewrite only this section.
+- Use a short 1–2 line intro, then markdown bullet points.
+- Return ONLY the updated text for this section, nothing else.
+"""
+        new_section_text = call_gemini(update_prompt).strip()
+        setattr(plan, target_section, new_section_text)
 
-                CURRENT ACCOUNT PLAN (JSON-like):
-                {plan_dict}
+        reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_section_text}"
+    else:
+        # normal question / general query
+        prompt = f"""
+{SYSTEM_INSTRUCTIONS}
 
-                CONVERSATION HISTORY (most recent messages):
-                {history_text}
+Company: {company_name}
 
-                USER MESSAGE:
-                {user_message}
+Structured info:
+{plan_dict}
 
-                If the user seems to be asking to update or rewrite a specific section, focus on that section.
-                Always answer in a clear, structured way. If you are updating a section, clearly state which
-                section you are updating and provide the new suggested text for that section.
-                """
+Recent conversation:
+{history_text}
 
-    reply = call_gemini(prompt)
+User message:
+{user_message}
 
-    # updation of section if needed
-    if target_section is not None:
-        try:
-            updated_prompt = f"""
-                                You are updating the '{target_section}' section of this account plan.
+Answer the user directly. Do not mention any 'account plan' or internal structures.
+Use a short intro, then bullet points where useful.
+"""
+        reply = call_gemini(prompt)
 
-                                CURRENT SECTION TEXT:
-                                {plan_dict.get(target_section, "")}
-
-                                USER REQUEST:
-                                {user_message}
-
-                                TASK:
-                                Rewrite ONLY the '{target_section}' section in a clear, business-friendly way that
-                                respects the user's request. Return ONLY the new text for that section, nothing else.
-                                """
-            new_section_text = call_gemini(updated_prompt)
-
-            setattr(plan, target_section, new_section_text.strip())
-
-            reply = (
-                reply
-                + "\n\n"
-                + f"(I have updated the **{target_section.replace('_', ' ').title()}** section of the account plan.)"
-            )
-        except Exception:
-            reply = (
-                reply
-                + "\n\n"
-                + "(I tried to update a section of the plan, but something went wrong. "
-                  "You can ask again more specifically if needed.)"
-            )
-
-    # chat memory updation
     new_history = chat_history + [
         {"role": "user", "content": user_message},
         {"role": "assistant", "content": reply},
