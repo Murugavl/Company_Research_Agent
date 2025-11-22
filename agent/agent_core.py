@@ -5,7 +5,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 from .account_plan import AccountPlan
-from .tools import research_company, split_into_sections
+from .tools import *
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -77,6 +77,7 @@ def generate_agent_reply(
         raw_text = research.get("raw_answer", "")
 
         sections = split_into_sections(raw_text)
+        sections = complete_missing_sections(sections)
 
         # fill plan with structured sections
         plan.overview = sections.get("overview", "")

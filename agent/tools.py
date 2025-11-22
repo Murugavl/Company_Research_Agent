@@ -81,3 +81,29 @@ def split_into_sections(raw_text: str) -> Dict[str, str]:
                 "risks": "",
                 "recommended_actions": ""
             }
+
+# fill missing or weak sections using gemini
+def complete_missing_sections(sections: Dict[str, str]) -> Dict[str, str]:
+    prompt = f"""
+                Given the partially filled account plan below, improve and complete any weak or empty sections.
+                Keep the writing concise and business-oriented.
+
+                Sections:
+                {sections}
+
+                Return ONLY valid JSON with the same keys.
+            """
+
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    res = model.generate_content(prompt)
+    text = res.text.strip()
+
+    try:
+        import json
+        return json.loads(text)
+    except:
+        try:
+            cleaned = text.replace("```json", "").replace("```", "")
+            return json.loads(cleaned)
+        except:
+            return sections
