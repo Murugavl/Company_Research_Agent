@@ -9,23 +9,24 @@ from .tools import research_company, split_into_sections, complete_missing_secti
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+print("Using API KEY:", os.getenv("GEMINI_API_KEY"))
 
-MODEL_NAME = "gemini-2.0-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 SYSTEM_INSTRUCTIONS = """
-                        You are a company research assistant.
+You are a company research assistant.
 
-                        Rules:
-                        - Answer naturally and professionally. Do not mention any 'account plan' or internal sections.
-                        - Use a short 1–2 line intro, then markdown bullet points where helpful.
-                        - When the user asks to update a specific section (risks, opportunities, competitors, etc.),
-                        rewrite only that section and return just the updated text.
-                        - When the user asks general questions (culture, location, work style, etc.),
-                        answer directly using research and reasonable inference.
-                        - Keep the tone concise, clear, and business-focused.
-                        - When generating or updating the structured view, ALWAYS fill every section
-                        with meaningful, non-empty business content. Avoid very short or generic text.
-                    """
+Rules:
+- Answer naturally and professionally. Do not mention any 'account plan' or internal sections.
+- Use a short 1–2 line intro, then markdown bullet points where helpful.
+- When the user asks to update a specific section (risks, opportunities, competitors, etc.),
+  rewrite only that section and return just the updated text.
+- When the user asks general questions (culture, location, work style, etc.),
+  answer directly using research and reasonable inference.
+- Keep the tone concise, clear, and business-focused.
+- When generating or updating the structured view, ALWAYS fill every section
+  with meaningful, non-empty business content. Avoid very short or generic text.
+"""
 
 SECTION_KEYWORDS: Dict[str, List[str]] = {
     "overview": ["overview", "summary", "about the company", "intro"],
@@ -186,11 +187,11 @@ def ensure_all_sections_filled(sections: Dict[str, str], company_name: str) -> D
 
 
 def generate_agent_reply(
-        user_message: str,
-        company_name: str,
-        current_plan: Optional[AccountPlan],
-        chat_history: List[Dict[str, str]],
-    ) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
+    user_message: str,
+    company_name: str,
+    current_plan: Optional[AccountPlan],
+    chat_history: List[Dict[str, str]],
+) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
 
     company_name = normalize_company_name(company_name)
 
@@ -230,20 +231,20 @@ def generate_agent_reply(
 
     if target_section and wants_update:
         section_prompt = f"""
-                            {SYSTEM_INSTRUCTIONS}
+{SYSTEM_INSTRUCTIONS}
 
-                            Rewrite ONLY the '{target_section}' section.
+Rewrite ONLY the '{target_section}' section.
 
-                            Company: {company_name}
+Company: {company_name}
 
-                            Current text:
-                            {plan_dict.get(target_section)}
+Current text:
+{plan_dict.get(target_section)}
 
-                            User request:
-                            {user_message}
+User request:
+{user_message}
 
-                            Return ONLY the updated text.
-                        """
+Return ONLY the updated text.
+"""
         new_text = call_gemini(section_prompt).strip()
         setattr(plan, target_section, new_text)
 
@@ -251,21 +252,21 @@ def generate_agent_reply(
 
     else:
         prompt = f"""
-                    {SYSTEM_INSTRUCTIONS}
+{SYSTEM_INSTRUCTIONS}
 
-                    Company: {company_name}
+Company: {company_name}
 
-                    Structured info:
-                    {plan_dict}
+Structured info:
+{plan_dict}
 
-                    Recent conversation:
-                    {history_text}
+Recent conversation:
+{history_text}
 
-                    User message:
-                    {user_message}
+User message:
+{user_message}
 
-                    Answer naturally and directly. Do not mention internal structures.
-                """
+Answer naturally and directly. Do not mention internal structures.
+"""
         reply = call_gemini(prompt)
 
     new_history = chat_history + [

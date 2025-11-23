@@ -53,19 +53,31 @@ def format_section_text(text, section_name=None):
         return "\n".join(out)
 
     if section_name in {"competitors", "opportunities", "risks", "recommended_actions"}:
-        t = raw.replace("[", "").replace("]", "").replace("'", "").strip()
-        t = t.replace("(e g", "(e.g.")
-        t = t.replace("e g", "e.g.")
-        t = re.sub(r"\s+", " ", t)
-        t = t.replace(" ,", ",").replace(" .", ".").strip()
-        parts = re.split(r",\s*|\.\s*", t)
 
-        out = []
-        for p in parts:
-            p = p.strip().strip(",").strip(".")
-            if p:
-                out.append(f"- {cap(p)}")
-        return "\n".join(out)
+        if raw.startswith("[") and raw.endswith("]"):
+            try:
+                import ast
+                items = ast.literal_eval(raw)
+                cleaned_items = []
+                for i in items:
+                    line = str(i).strip()
+                    line = line.replace("e g", "e.g.").replace("(e g", "(e.g.")
+                    cleaned_items.append(f"- {line}")
+                return "\n".join(cleaned_items)
+            except:
+                pass
+
+        lines = []
+        for line in raw.split("\n"):
+            cleaned = line.strip().strip("-• ").strip()
+            if cleaned:
+                cleaned = cleaned.replace("e g", "e.g.").replace("(e g", "(e.g.")
+                cleaned = re.sub(r"\s+", " ", cleaned)
+                lines.append(f"- {cleaned}")
+
+        return "\n".join(lines)
+
+
 
     if section_name in {
         "overview",
