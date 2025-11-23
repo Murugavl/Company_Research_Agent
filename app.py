@@ -133,3 +133,9 @@ if st.session_state.plan:
         st.markdown(f"**{key.replace('_', ' ').title()}**")
         st.markdown(format_section_text(value, key))
         st.markdown("")
+
+
+if st._is_running_with_streamlit:
+    print("\n=======================================")
+    print(" App is running at: http://localhost:8501")
+    print("=======================================\n")
