@@ -5,13 +5,14 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 from .account_plan import AccountPlan
-from .tools import research_company, split_into_sections, complete_missing_sections
+from .tools import *
+from .logger import logger
+
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-print("Using API KEY:", os.getenv("GEMINI_API_KEY"))
 
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-2.0-flash"
 
 SYSTEM_INSTRUCTIONS = """
 You are a company research assistant.
@@ -44,26 +45,36 @@ UPDATE_KEYWORDS = ["update", "change", "edit", "modify", "rewrite", "revise"]
 
 
 def detect_target_section(user_message: str) -> Optional[str]:
+    logger.info(f"[detect_target_section] user_message={user_message}")
     msg = user_message.lower()
     for section, words in SECTION_KEYWORDS.items():
         for w in words:
             if w in msg:
+                logger.info(f"[detect_target_section] Detected section={section}")
                 return section
+    logger.info("[detect_target_section] No section detected")
     return None
 
 
 def is_update_intent(user_message: str) -> bool:
+    logger.info(f"[is_update_intent] user_message={user_message}")
     msg = user_message.lower()
-    return any(w in msg for w in UPDATE_KEYWORDS)
+    result = any(w in msg for w in UPDATE_KEYWORDS)
+    logger.info(f"[is_update_intent] intent={result}")
+    return result
 
 
 def call_gemini(prompt: str) -> str:
+    logger.info("[call_gemini] Sending prompt to Gemini")
     model = genai.GenerativeModel(MODEL_NAME)
     res = model.generate_content(prompt)
-    return res.text.strip() if res.text else ""
+    reply = res.text.strip() if res.text else ""
+    logger.info(f"[call_gemini] Received response_length={len(reply)}")
+    return reply
 
 
 def normalize_company_name(raw_name: str) -> str:
+    logger.info(f"[normalize_company_name] raw_name={raw_name}")
     raw_name = (raw_name or "").strip()
     if not raw_name:
         return raw_name
@@ -78,14 +89,18 @@ def normalize_company_name(raw_name: str) -> str:
         res = model.generate_content(prompt)
         name = (res.text or "").strip()
         if name:
+            logger.info(f"[normalize_company_name] normalized={name}")
             return name
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"[normalize_company_name] Error={e}")
 
-    return " ".join(word.capitalize() for word in raw_name.split())
+    fallback = " ".join(word.capitalize() for word in raw_name.split())
+    logger.info(f"[normalize_company_name] fallback={fallback}")
+    return fallback
 
 
 def _fallback_text(section: str, company_name: str) -> str:
+    logger.warning(f"[fallback] Missing content for section={section}")
     c = company_name
 
     if section == "overview":
@@ -162,6 +177,7 @@ def _fallback_text(section: str, company_name: str) -> str:
 
 
 def ensure_all_sections_filled(sections: Dict[str, str], company_name: str) -> Dict[str, str]:
+    logger.info("[ensure_all_sections_filled] Checking sections")
     required_keys = [
         "overview",
         "products_services",
@@ -178,10 +194,9 @@ def ensure_all_sections_filled(sections: Dict[str, str], company_name: str) -> D
 
     for key in required_keys:
         value = sections.get(key, "")
-        text = str(value).strip() if value else ""
-        if not text or text.lower() in {"none", "null", "undefined"}:
-            text = _fallback_text(key, company_name)
-        result[key] = text
+        if not value or str(value).strip() == "":
+            logger.warning(f"[ensure_all_sections_filled] Auto-filling missing section={key}")
+        result[key] = value or _fallback_text(key, company_name)
 
     return result
 
@@ -193,18 +208,23 @@ def generate_agent_reply(
     chat_history: List[Dict[str, str]],
 ) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
 
+    logger.info(f"[generate_agent_reply] user_message={user_message}, company_name={company_name}")
+
     company_name = normalize_company_name(company_name)
 
     if current_plan is None:
+        logger.info("[generate_agent_reply] Creating new plan")
         plan = AccountPlan.empty(company_name)
 
         research = research_company(company_name)
-        raw_text = research.get("raw_answer", "")
+        logger.info("[generate_agent_reply] Research completed")
 
+        raw_text = research.get("raw_answer", "")
         sections = split_into_sections(raw_text)
         sections = complete_missing_sections(sections)
         sections = ensure_all_sections_filled(sections, company_name)
 
+        # assign
         plan.overview = sections.get("overview", "")
         plan.products_services = sections.get("products_services", "")
         plan.market_position = sections.get("market_position", "")
@@ -216,12 +236,15 @@ def generate_agent_reply(
         plan.recommended_actions = sections.get("recommended_actions", "")
 
     else:
+        logger.info("[generate_agent_reply] Using existing plan")
         plan = current_plan
 
     plan_dict = plan.to_dict()
 
     target_section = detect_target_section(user_message)
     wants_update = is_update_intent(user_message)
+
+    logger.info(f"[generate_agent_reply] target_section={target_section}, wants_update={wants_update}")
 
     history_lines = [
         f"{m.get('role','').upper()}: {m.get('content','')}"
@@ -230,6 +253,7 @@ def generate_agent_reply(
     history_text = "\n".join(history_lines)
 
     if target_section and wants_update:
+        logger.info(f"[generate_agent_reply] Updating section={target_section}")
         section_prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 
@@ -251,6 +275,7 @@ Return ONLY the updated text.
         reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_text}"
 
     else:
+        logger.info("[generate_agent_reply] Generating natural answer")
         prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 
@@ -269,9 +294,13 @@ Answer naturally and directly. Do not mention internal structures.
 """
         reply = call_gemini(prompt)
 
+    logger.info("[generate_agent_reply] Reply generated")
+
     new_history = chat_history + [
         {"role": "user", "content": user_message},
         {"role": "assistant", "content": reply},
     ]
+
+    logger.info("[generate_agent_reply] History updated")
 
     return reply, plan, new_history
