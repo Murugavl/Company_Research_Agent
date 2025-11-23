@@ -14,22 +14,17 @@ if "company" not in st.session_state:
     st.session_state.company = ""
 
 
-def guess_company_name(message: str, current: str) -> str:
+def guess_company_name(message, current):
     if current:
         return current
-
-    text = message.strip()
-    lower = text.lower()
-
-    if "about" in lower:
+    text = message.strip().lower()
+    if "about" in text:
         try:
-            idx = lower.index("about") + len("about")
-            after = text[idx:].strip(" :,-")
-            return after if after else text
-        except Exception:
-            return text
-
-    return text
+            i = text.index("about") + len("about")
+            return message[i:].strip(" :,-") or message
+        except:
+            return message
+    return message
 
 
 def format_section_text(text, section_name=None):
@@ -38,75 +33,49 @@ def format_section_text(text, section_name=None):
 
     raw = str(text).strip()
 
-    # Special formatting for Products & Services (Category → Items)
-    if section_name == "products_services":
-        items = []
-
-        # If model returned a Python list
-        if isinstance(text, list):
-            for entry in text:
-                entry = str(entry).strip().replace("\n", ", ")
-                if "→" in entry:
-                    items.append(entry)
-                else:
-                    parts = entry.split(":", 1)
-                    if len(parts) == 2:
-                        cat = parts[0].strip()
-                        vals = parts[1].strip()
-                        items.append(f"{cat} → {vals}")
-        else:
-            # If it's a dict-like string: "{'A':'x','B':'y'}"
-            if raw.startswith("{") and raw.endswith("}"):
-                cleaned = raw.strip("{}")
-                for pair in cleaned.split("' '"):
-                    pair = pair.replace("{", "").replace("}", "").replace("'", "")
-                    if ":" in pair:
-                        cat, vals = pair.split(":", 1)
-                        items.append(f"{cat.strip()} → {vals.strip().replace(',', ', ')}")
-            else:
-                # fallback: each line "Category: values"
-                lines = raw.split("\n")
-                for line in lines:
-                    if ":" in line:
-                        cat, vals = line.split(":", 1)
-                        vals = vals.replace("\n", ", ").strip()
-                        items.append(f"{cat.strip()} → {vals}")
-        
-        return "\n".join(items)
-
-    bullet_sections = {
-        "competitors",
-        "opportunities",
-        "risks",
-        "recommended_actions"
-    }
-
     def cap(s):
-        return s[0].upper() + s[1:] if s else s
+        return s[:1].upper() + s[1:] if s else s
 
-    if section_name not in bullet_sections:
-        cleaned = cap(raw.replace("\n", " ").strip())
-        return cleaned
+    if section_name == "products_services":
+        t = raw.replace("[", "").replace("]", "").replace("{", "").replace("}", "")
+        t = t.replace("'", "").strip()
+        parts = re.split(r"\s{2,}|\n", t)
+        out = []
+        for p in parts:
+            p = p.strip().strip(",")
+            if not p:
+                continue
+            if ":" in p and "→" not in p:
+                left, right = p.split(":", 1)
+                out.append(f"{left.strip()} → {right.strip()}")
+            else:
+                out.append(p)
+        return "\n".join(out)
 
-    items = []
-    if isinstance(text, list):
-        for i in text:
-            s = str(i).strip().lstrip("-• ").strip()
-            if s:
-                items.append(f"- {cap(s)}")
-        return "\n".join(items)
+    if section_name in {"competitors", "opportunities", "risks", "recommended_actions"}:
+        t = raw.replace("[", "").replace("]", "").replace("'", "").strip()
+        t = t.replace("(e g", "(e.g.")
+        t = t.replace("e g", "e.g.")
+        t = re.sub(r"\s+", " ", t)
+        t = t.replace(" ,", ",").replace(" .", ".").strip()
+        parts = re.split(r",\s*|\.\s*", t)
 
-    if "," in raw and "\n" not in raw:
-        parts = [p.strip() for p in raw.split(",") if p.strip()]
-        if len(parts) > 1:
-            return "\n".join(f"- {cap(p)}" for p in parts)
+        out = []
+        for p in parts:
+            p = p.strip().strip(",").strip(".")
+            if p:
+                out.append(f"- {cap(p)}")
+        return "\n".join(out)
 
-    if "\n" in raw:
-        lines = [l.strip().lstrip("-• ").strip() for l in raw.split("\n") if l.strip()]
-        if len(lines) > 1:
-            return "\n".join(f"- {cap(l)}" for l in lines)
+    if section_name in {
+        "overview",
+        "market_position",
+        "financial_snapshot",
+        "key_contacts"
+    }:
+        return cap(raw.replace("\n", " ").strip())
 
-    return f"- {cap(raw)}"
+    return cap(raw)
 
 
 st.title("💼 Company Research Assistant")
@@ -119,11 +88,11 @@ with st.sidebar:
         st.session_state.company = ""
         st.success("Conversation and structured summary cleared.")
 
+
 user_msg = st.chat_input("Ask about any company...")
 
 if user_msg:
     st.session_state.company = guess_company_name(user_msg, st.session_state.company)
-
     with st.spinner("Working..."):
         reply, plan, history = generate_agent_reply(
             user_message=user_msg,
@@ -134,9 +103,11 @@ if user_msg:
         st.session_state.plan = plan
         st.session_state.chat_history = history
 
+
 for m in st.session_state.chat_history:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
+
 
 if st.session_state.plan:
     st.markdown("---")
@@ -147,8 +118,6 @@ if st.session_state.plan:
     for key, value in data.items():
         if key.lower() == "company_name":
             continue
-
-        title = key.replace("_", " ").title()
-        st.markdown(f"**{title}**")
+        st.markdown(f"**{key.replace('_', ' ').title()}**")
         st.markdown(format_section_text(value, key))
         st.markdown("")
