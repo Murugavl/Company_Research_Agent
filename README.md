@@ -84,6 +84,10 @@ Create a .env file in the project root:
 #### Run container
     docker run -p 8501:8501 --env-file .env research-agent
 
+#### Open in browser:
+  
+    http://localhost:8501/
+
 ## Usage Example
 
 **User:** tell me about Eightfold AI  
