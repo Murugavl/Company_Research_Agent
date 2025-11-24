@@ -23,6 +23,11 @@ SYSTEM_INSTRUCTIONS = """
                         - When the user asks general questions (culture, location, work style, etc.),
                         answer directly using research and reasonable inference.
                         - Keep the tone concise, clear, and business-focused.
+                        - Never reuse any text from earlier answers.
+                        - Never bring in content from previously discussed companies.
+                        - Only talk about the company currently mentioned by the user.
+                        - The structured summary must ONLY reflect the current company, not any previous one.
+                        - Ignore chat history unless the user is continuing the same company discussion.
                         - When generating or updating the structured view, ALWAYS fill every section
                         with meaningful, non-empty business content. Avoid very short or generic text.
                     """
@@ -184,6 +189,29 @@ def ensure_all_sections_filled(sections: Dict[str, str], company_name: str) -> D
 
     return result
 
+def clean_list_response(text: str) -> str:
+    # If model output looks like a python list, convert to bullets
+    if text.strip().startswith("[") and text.strip().endswith("]"):
+        try:
+            import ast
+            items = ast.literal_eval(text)
+            if isinstance(items, list):
+                return "\n".join(f"- {i}" for i in items)
+        except Exception:
+            pass
+    return text
+
+
+def get_last_company_from_history(chat_history: List[Dict[str, str]]) -> Optional[str]:
+    for msg in reversed(chat_history):
+        if msg["role"] == "user":
+            possible = normalize_company_name(msg["content"])
+            if possible and len(possible.split()) <= 3:
+                # Must NOT be noise statements
+                banned = {"can", "you", "tell", "update", "its", "about", "the"}
+                if not any(w in banned for w in possible.lower().split()):
+                    return possible
+    return None
 
 def generate_agent_reply(
         user_message: str,
@@ -192,14 +220,36 @@ def generate_agent_reply(
         chat_history: List[Dict[str, str]],
     ) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
 
+    # -----------------------------------------------
+    # 1️⃣ Detect if this is an update request
+    # -----------------------------------------------
+    target_section = detect_target_section(user_message)
+    wants_update = is_update_intent(user_message)
+
+    # -----------------------------------------------
+    # 2️⃣ More robust company switching logic
+    # -----------------------------------------------
+    # Determine active company
+    if wants_update:
+        # Updates belong to the previous referenced company
+        last_company = get_last_company_from_history(chat_history)
+        if last_company:
+            company_name = last_company
+    else:
+        # New company mentioned
+        candidate = normalize_company_name(user_message)
+        banned = {"can", "you", "tell", "about", "update", "its", "the", "edit"}
+        if candidate and not any(w in banned for w in candidate.lower().split()):
+            current_plan = None
+            company_name = candidate
+
+
+    # Always re-normalize company_name
     company_name = normalize_company_name(company_name)
-    # NEW FIX — Detect if the user asked about a different company
-    normalized_from_msg = normalize_company_name(user_message)
-    if normalized_from_msg.lower() != company_name.lower():
-        current_plan = None
-        company_name = normalized_from_msg
 
-
+    # -----------------------------------------------
+    # 3️⃣ Initial plan creation
+    # -----------------------------------------------
     if current_plan is None:
         plan = AccountPlan.empty(company_name)
 
@@ -210,70 +260,81 @@ def generate_agent_reply(
         sections = complete_missing_sections(sections)
         sections = ensure_all_sections_filled(sections, company_name)
 
-        plan.overview = sections.get("overview", "")
-        plan.products_services = sections.get("products_services", "")
-        plan.market_position = sections.get("market_position", "")
-        plan.competitors = sections.get("competitors", "")
-        plan.financial_snapshot = sections.get("financial_snapshot", "")
-        plan.key_contacts = sections.get("key_contacts", "")
-        plan.opportunities = sections.get("opportunities", "")
-        plan.risks = sections.get("risks", "")
-        plan.recommended_actions = sections.get("recommended_actions", "")
-
+        plan.overview = sections["overview"]
+        plan.products_services = sections["products_services"]
+        plan.market_position = sections["market_position"]
+        plan.competitors = sections["competitors"]
+        plan.financial_snapshot = sections["financial_snapshot"]
+        plan.key_contacts = sections["key_contacts"]
+        plan.opportunities = sections["opportunities"]
+        plan.risks = sections["risks"]
+        plan.recommended_actions = sections["recommended_actions"]
     else:
         plan = current_plan
 
     plan_dict = plan.to_dict()
 
-    target_section = detect_target_section(user_message)
-    wants_update = is_update_intent(user_message)
-
+    # -----------------------------------------------
+    # 4️⃣ Conversation history
+    # -----------------------------------------------
     history_lines = [
         f"{m.get('role','').upper()}: {m.get('content','')}"
         for m in chat_history[-6:]
     ]
     history_text = "\n".join(history_lines)
 
+    # -----------------------------------------------
+    # 5️⃣ Section updates
+    # -----------------------------------------------
     if target_section and wants_update:
-        section_prompt = f"""
-                            {SYSTEM_INSTRUCTIONS}
+        update_prompt = f"""
+{SYSTEM_INSTRUCTIONS}
 
-                            Rewrite ONLY the '{target_section}' section.
+Rewrite ONLY the '{target_section}' section.
 
-                            Company: {company_name}
+Company: {company_name}
 
-                            Current text:
-                            {plan_dict.get(target_section)}
+Current text:
+{plan_dict.get(target_section)}
 
-                            User request:
-                            {user_message}
+User request:
+{user_message}
 
-                            Return ONLY the updated text.
-                        """
-        new_text = call_gemini(section_prompt).strip()
+Return ONLY the updated text.
+"""
+        new_text = clean_list_response(call_gemini(update_prompt).strip())
         setattr(plan, target_section, new_text)
 
         reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_text}"
 
     else:
+        # -------------------------------------------
+        # 6️⃣ Natural conversational answer
+        # -------------------------------------------
         prompt = f"""
-                    {SYSTEM_INSTRUCTIONS}
+{SYSTEM_INSTRUCTIONS}
 
-                    Company: {company_name}
+Company: {company_name}
 
-                    Structured info:
-                    {plan_dict}
+Structured info:
+{plan_dict}
 
-                    Recent conversation:
-                    {history_text}
+Recent conversation (only for context, not for reuse):
+{history_text}
 
-                    User message:
-                    {user_message}
+Remember: DO NOT repeat or reuse prior sentences or summaries.
 
-                    Answer naturally and directly. Do not mention internal structures.
-                """
+
+User message:
+{user_message}
+
+Answer naturally and directly. Do not mention internal structures.
+"""
         reply = call_gemini(prompt)
 
+    # -----------------------------------------------
+    # 7️⃣ Update chat history
+    # -----------------------------------------------
     new_history = chat_history + [
         {"role": "user", "content": user_message},
         {"role": "assistant", "content": reply},
