@@ -200,6 +200,39 @@ def ensure_all_sections_filled(sections: Dict[str, str], company_name: str) -> D
 
     return result
 
+def detect_high_conflict(raw_text: str) -> Optional[str]:
+    text = raw_text.lower()
+
+    # Only trigger for true contradictions (NOT uncertainty)
+    contradiction_pairs = [
+        ("increase", "decrease"),
+        ("grew", "declined"),
+        ("profit", "loss"),
+        ("expansion", "cutback"),
+    ]
+
+    for a, b in contradiction_pairs:
+        if a in text and b in text:
+            return "I'm finding conflicting information across sources. Should I dig deeper?"
+
+    # Trigger only for BIG numerical mismatches (>=50%)
+    import re
+    nums = re.findall(r"\d[\d,\.]*", raw_text)
+    cleaned = []
+    for n in nums:
+        try:
+            cleaned.append(float(n.replace(",", "")))
+        except:
+            pass
+
+    if len(cleaned) >= 2:
+        lo, hi = min(cleaned), max(cleaned)
+        if hi > 0 and (hi - lo) >= hi * 0.50:  # 50% gap = real conflict
+            return "Some reported numbers differ significantly across sources. Should I dig deeper?"
+
+    return None
+
+
 
 def generate_agent_reply(
     user_message: str,
@@ -209,6 +242,15 @@ def generate_agent_reply(
 ) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
 
     logger.info(f"[generate_agent_reply] user_message={user_message}, company_name={company_name}")
+
+    normalized_from_msg = normalize_company_name(user_message)
+
+    # Only switch if user is clearly asking about a new company
+    if any(keyword in user_message.lower() for keyword in ["tell me about", "about ", "company"]):
+        if normalized_from_msg.lower() != company_name.lower():
+            current_plan = None
+            company_name = normalized_from_msg
+
 
     company_name = normalize_company_name(company_name)
 
@@ -220,6 +262,14 @@ def generate_agent_reply(
         logger.info("[generate_agent_reply] Research completed")
 
         raw_text = research.get("raw_answer", "")
+
+        conflict_msg = detect_high_conflict(raw_text)
+        if conflict_msg:
+            logger.info("[generate_agent_reply] Conflict detected")
+            reply = conflict_msg
+            new_history = chat_history + [{"role": "assistant", "content": reply}]
+            return reply, None, new_history
+
         sections = split_into_sections(raw_text)
         sections = complete_missing_sections(sections)
         sections = ensure_all_sections_filled(sections, company_name)
