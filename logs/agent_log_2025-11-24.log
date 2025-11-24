@@ -453,3 +453,77 @@
 2025-11-24 12:59:59,812 — INFO — [generate_agent_reply] Creating new plan
 2025-11-24 13:00:01,148 — INFO — [generate_agent_reply] Research completed
 2025-11-24 13:00:01,149 — INFO — [generate_agent_reply] Conflict detected
+2025-11-24 13:04:20,395 — INFO — [generate_agent_reply] user_message=can you tell me about zoho, company_name=zoho
+2025-11-24 13:04:20,395 — INFO — [normalize_company_name] raw_name=can you tell me about zoho
+2025-11-24 13:04:21,537 — INFO — [normalize_company_name] normalized=Zoho
+2025-11-24 13:04:21,537 — INFO — [normalize_company_name] raw_name=zoho
+2025-11-24 13:04:22,437 — INFO — [normalize_company_name] normalized=Zoho
+2025-11-24 13:04:22,437 — INFO — [generate_agent_reply] Creating new plan
+2025-11-24 13:04:23,546 — INFO — [generate_agent_reply] Research completed
+2025-11-24 13:04:36,053 — INFO — [ensure_all_sections_filled] Checking sections
+2025-11-24 13:04:36,053 — INFO — [detect_target_section] user_message=can you tell me about zoho
+2025-11-24 13:04:36,053 — INFO — [detect_target_section] No section detected
+2025-11-24 13:04:36,053 — INFO — [is_update_intent] user_message=can you tell me about zoho
+2025-11-24 13:04:36,054 — INFO — [is_update_intent] intent=False
+2025-11-24 13:04:36,054 — INFO — [generate_agent_reply] target_section=None, wants_update=False
+2025-11-24 13:04:36,054 — INFO — [generate_agent_reply] Generating natural answer
+2025-11-24 13:04:36,054 — INFO — [call_gemini] Sending prompt to Gemini
+2025-11-24 13:04:37,957 — INFO — [call_gemini] Received response_length=430
+2025-11-24 13:04:37,957 — INFO — [generate_agent_reply] Reply generated
+2025-11-24 13:04:37,957 — INFO — [generate_agent_reply] History updated
+2025-11-24 13:04:49,967 — INFO — [generate_agent_reply] user_message=can you update its risks, company_name=zoho
+2025-11-24 13:04:49,967 — INFO — [normalize_company_name] raw_name=can you update its risks
+2025-11-24 13:04:50,883 — INFO — [normalize_company_name] normalized=Can You Update Its Risks
+2025-11-24 13:04:50,883 — INFO — [normalize_company_name] raw_name=zoho
+2025-11-24 13:04:51,775 — INFO — [normalize_company_name] normalized=Zoho
+2025-11-24 13:04:51,775 — INFO — [generate_agent_reply] Using existing plan
+2025-11-24 13:04:51,775 — INFO — [detect_target_section] user_message=can you update its risks
+2025-11-24 13:04:51,775 — INFO — [detect_target_section] Detected section=risks
+2025-11-24 13:04:51,776 — INFO — [is_update_intent] user_message=can you update its risks
+2025-11-24 13:04:51,776 — INFO — [is_update_intent] intent=True
+2025-11-24 13:04:51,776 — INFO — [generate_agent_reply] target_section=risks, wants_update=True
+2025-11-24 13:04:51,776 — INFO — [generate_agent_reply] Updating section=risks
+2025-11-24 13:04:51,776 — INFO — [call_gemini] Sending prompt to Gemini
+2025-11-24 13:04:54,290 — INFO — [call_gemini] Received response_length=1196
+2025-11-24 13:04:54,291 — INFO — [generate_agent_reply] Reply generated
+2025-11-24 13:04:54,291 — INFO — [generate_agent_reply] History updated
+2025-11-24 13:05:24,485 — INFO — [generate_agent_reply] user_message=can you tell me about eightfold ai, company_name=eightfold ai
+2025-11-24 13:05:24,485 — INFO — [normalize_company_name] raw_name=can you tell me about eightfold ai
+2025-11-24 13:05:25,394 — INFO — [normalize_company_name] normalized=Eightfold AI
+2025-11-24 13:05:25,394 — INFO — [normalize_company_name] raw_name=eightfold ai
+2025-11-24 13:05:26,448 — INFO — [normalize_company_name] normalized=Eightfold AI
+2025-11-24 13:05:26,448 — INFO — [generate_agent_reply] Creating new plan
+2025-11-24 13:05:27,708 — INFO — [generate_agent_reply] Research completed
+2025-11-24 13:05:27,709 — INFO — [generate_agent_reply] Conflict detected
+2025-11-24 13:05:30,975 — INFO — [generate_agent_reply] user_message=yes, company_name=eightfold ai
+2025-11-24 13:05:30,976 — INFO — [normalize_company_name] raw_name=yes
+2025-11-24 13:05:31,807 — INFO — [normalize_company_name] normalized=Yes
+2025-11-24 13:05:31,807 — INFO — [normalize_company_name] raw_name=eightfold ai
+2025-11-24 13:05:32,750 — INFO — [normalize_company_name] normalized=Eightfold AI
+2025-11-24 13:05:32,751 — INFO — [generate_agent_reply] Creating new plan
+2025-11-24 13:05:33,893 — INFO — [generate_agent_reply] Research completed
+2025-11-24 13:05:33,893 — INFO — [generate_agent_reply] Conflict detected
+2025-11-24 13:10:43,098 — INFO — [generate_agent_reply] user_message=can you tell me about eightfold ai, company_name=eightfold ai
+2025-11-24 13:10:43,099 — INFO — [normalize_company_name] raw_name=can you tell me about eightfold ai
+2025-11-24 13:10:44,681 — INFO — [normalize_company_name] normalized=Eightfold AI
+2025-11-24 13:10:44,681 — INFO — [normalize_company_name] raw_name=eightfold ai
+2025-11-24 13:10:45,954 — INFO — [normalize_company_name] normalized=Eightfold AI
+2025-11-24 13:10:45,955 — INFO — [generate_agent_reply] Creating new plan
+2025-11-24 13:10:47,140 — INFO — [generate_agent_reply] Research completed
+2025-11-24 13:11:24,464 — INFO — [generate_agent_reply] user_message=can you tell me about eightfold ai, company_name=eightfold ai
+2025-11-24 13:11:24,465 — INFO — [normalize_company_name] raw_name=can you tell me about eightfold ai
+2025-11-24 13:11:25,608 — INFO — [normalize_company_name] normalized=Eightfold AI
+2025-11-24 13:11:25,608 — INFO — [normalize_company_name] raw_name=eightfold ai
+2025-11-24 13:11:26,665 — INFO — [normalize_company_name] normalized=Eightfold AI
+2025-11-24 13:11:26,665 — INFO — [generate_agent_reply] Creating new plan
+2025-11-24 13:11:27,772 — INFO — [generate_agent_reply] Research completed
+2025-11-24 13:15:26,446 — INFO — [generate_agent_reply] user_message=can you tell me about eightfold ai, company_name=eightfold ai
+2025-11-24 13:15:26,446 — INFO — [normalize_company_name] raw_name=can you tell me about eightfold ai
+2025-11-24 13:15:27,857 — INFO — [normalize_company_name] normalized=Eightfold AI
+2025-11-24 13:15:27,858 — INFO — [normalize_company_name] raw_name=eightfold ai
+2025-11-24 13:15:28,819 — INFO — [normalize_company_name] normalized=Eightfold AI
+2025-11-24 13:16:11,812 — INFO — [generate_agent_reply] user_message=can you tell me about eightfold ai, company_name=eightfold ai
+2025-11-24 13:16:11,813 — INFO — [normalize_company_name] raw_name=can you tell me about eightfold ai
+2025-11-24 13:16:12,976 — INFO — [normalize_company_name] normalized=Eightfold AI
+2025-11-24 13:16:12,976 — INFO — [normalize_company_name] raw_name=eightfold ai
+2025-11-24 13:16:13,939 — INFO — [normalize_company_name] normalized=Eightfold AI

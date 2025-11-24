@@ -5,9 +5,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 from .account_plan import AccountPlan
-from .tools import *
-from .logger import logger
-
+from .tools import research_company, split_into_sections, complete_missing_sections
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -15,19 +13,19 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 MODEL_NAME = "gemini-2.0-flash"
 
 SYSTEM_INSTRUCTIONS = """
-You are a company research assistant.
+                        You are a company research assistant.
 
-Rules:
-- Answer naturally and professionally. Do not mention any 'account plan' or internal sections.
-- Use a short 1–2 line intro, then markdown bullet points where helpful.
-- When the user asks to update a specific section (risks, opportunities, competitors, etc.),
-  rewrite only that section and return just the updated text.
-- When the user asks general questions (culture, location, work style, etc.),
-  answer directly using research and reasonable inference.
-- Keep the tone concise, clear, and business-focused.
-- When generating or updating the structured view, ALWAYS fill every section
-  with meaningful, non-empty business content. Avoid very short or generic text.
-"""
+                        Rules:
+                        - Answer naturally and professionally. Do not mention any 'account plan' or internal sections.
+                        - Use a short 1–2 line intro, then markdown bullet points where helpful.
+                        - When the user asks to update a specific section (risks, opportunities, competitors, etc.),
+                        rewrite only that section and return just the updated text.
+                        - When the user asks general questions (culture, location, work style, etc.),
+                        answer directly using research and reasonable inference.
+                        - Keep the tone concise, clear, and business-focused.
+                        - When generating or updating the structured view, ALWAYS fill every section
+                        with meaningful, non-empty business content. Avoid very short or generic text.
+                    """
 
 SECTION_KEYWORDS: Dict[str, List[str]] = {
     "overview": ["overview", "summary", "about the company", "intro"],
@@ -45,36 +43,26 @@ UPDATE_KEYWORDS = ["update", "change", "edit", "modify", "rewrite", "revise"]
 
 
 def detect_target_section(user_message: str) -> Optional[str]:
-    logger.info(f"[detect_target_section] user_message={user_message}")
     msg = user_message.lower()
     for section, words in SECTION_KEYWORDS.items():
         for w in words:
             if w in msg:
-                logger.info(f"[detect_target_section] Detected section={section}")
                 return section
-    logger.info("[detect_target_section] No section detected")
     return None
 
 
 def is_update_intent(user_message: str) -> bool:
-    logger.info(f"[is_update_intent] user_message={user_message}")
     msg = user_message.lower()
-    result = any(w in msg for w in UPDATE_KEYWORDS)
-    logger.info(f"[is_update_intent] intent={result}")
-    return result
+    return any(w in msg for w in UPDATE_KEYWORDS)
 
 
 def call_gemini(prompt: str) -> str:
-    logger.info("[call_gemini] Sending prompt to Gemini")
     model = genai.GenerativeModel(MODEL_NAME)
     res = model.generate_content(prompt)
-    reply = res.text.strip() if res.text else ""
-    logger.info(f"[call_gemini] Received response_length={len(reply)}")
-    return reply
+    return res.text.strip() if res.text else ""
 
 
 def normalize_company_name(raw_name: str) -> str:
-    logger.info(f"[normalize_company_name] raw_name={raw_name}")
     raw_name = (raw_name or "").strip()
     if not raw_name:
         return raw_name
@@ -89,18 +77,14 @@ def normalize_company_name(raw_name: str) -> str:
         res = model.generate_content(prompt)
         name = (res.text or "").strip()
         if name:
-            logger.info(f"[normalize_company_name] normalized={name}")
             return name
-    except Exception as e:
-        logger.error(f"[normalize_company_name] Error={e}")
+    except Exception:
+        pass
 
-    fallback = " ".join(word.capitalize() for word in raw_name.split())
-    logger.info(f"[normalize_company_name] fallback={fallback}")
-    return fallback
+    return " ".join(word.capitalize() for word in raw_name.split())
 
 
 def _fallback_text(section: str, company_name: str) -> str:
-    logger.warning(f"[fallback] Missing content for section={section}")
     c = company_name
 
     if section == "overview":
@@ -177,7 +161,6 @@ def _fallback_text(section: str, company_name: str) -> str:
 
 
 def ensure_all_sections_filled(sections: Dict[str, str], company_name: str) -> Dict[str, str]:
-    logger.info("[ensure_all_sections_filled] Checking sections")
     required_keys = [
         "overview",
         "products_services",
@@ -194,87 +177,39 @@ def ensure_all_sections_filled(sections: Dict[str, str], company_name: str) -> D
 
     for key in required_keys:
         value = sections.get(key, "")
-        if not value or str(value).strip() == "":
-            logger.warning(f"[ensure_all_sections_filled] Auto-filling missing section={key}")
-        result[key] = value or _fallback_text(key, company_name)
+        text = str(value).strip() if value else ""
+        if not text or text.lower() in {"none", "null", "undefined"}:
+            text = _fallback_text(key, company_name)
+        result[key] = text
 
     return result
 
-def detect_high_conflict(raw_text: str) -> Optional[str]:
-    text = raw_text.lower()
-
-    # Only trigger for true contradictions (NOT uncertainty)
-    contradiction_pairs = [
-        ("increase", "decrease"),
-        ("grew", "declined"),
-        ("profit", "loss"),
-        ("expansion", "cutback"),
-    ]
-
-    for a, b in contradiction_pairs:
-        if a in text and b in text:
-            return "I'm finding conflicting information across sources. Should I dig deeper?"
-
-    # Trigger only for BIG numerical mismatches (>=50%)
-    import re
-    nums = re.findall(r"\d[\d,\.]*", raw_text)
-    cleaned = []
-    for n in nums:
-        try:
-            cleaned.append(float(n.replace(",", "")))
-        except:
-            pass
-
-    if len(cleaned) >= 2:
-        lo, hi = min(cleaned), max(cleaned)
-        if hi > 0 and (hi - lo) >= hi * 0.50:  # 50% gap = real conflict
-            return "Some reported numbers differ significantly across sources. Should I dig deeper?"
-
-    return None
-
-
 
 def generate_agent_reply(
-    user_message: str,
-    company_name: str,
-    current_plan: Optional[AccountPlan],
-    chat_history: List[Dict[str, str]],
-) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
-
-    logger.info(f"[generate_agent_reply] user_message={user_message}, company_name={company_name}")
-
-    normalized_from_msg = normalize_company_name(user_message)
-
-    # Only switch if user is clearly asking about a new company
-    if any(keyword in user_message.lower() for keyword in ["tell me about", "about ", "company"]):
-        if normalized_from_msg.lower() != company_name.lower():
-            current_plan = None
-            company_name = normalized_from_msg
-
+        user_message: str,
+        company_name: str,
+        current_plan: Optional[AccountPlan],
+        chat_history: List[Dict[str, str]],
+    ) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
 
     company_name = normalize_company_name(company_name)
+    # NEW FIX — Detect if the user asked about a different company
+    normalized_from_msg = normalize_company_name(user_message)
+    if normalized_from_msg.lower() != company_name.lower():
+        current_plan = None
+        company_name = normalized_from_msg
+
 
     if current_plan is None:
-        logger.info("[generate_agent_reply] Creating new plan")
         plan = AccountPlan.empty(company_name)
 
         research = research_company(company_name)
-        logger.info("[generate_agent_reply] Research completed")
-
         raw_text = research.get("raw_answer", "")
-
-        conflict_msg = detect_high_conflict(raw_text)
-        if conflict_msg:
-            logger.info("[generate_agent_reply] Conflict detected")
-            reply = conflict_msg
-            new_history = chat_history + [{"role": "assistant", "content": reply}]
-            return reply, None, new_history
 
         sections = split_into_sections(raw_text)
         sections = complete_missing_sections(sections)
         sections = ensure_all_sections_filled(sections, company_name)
 
-        # assign
         plan.overview = sections.get("overview", "")
         plan.products_services = sections.get("products_services", "")
         plan.market_position = sections.get("market_position", "")
@@ -286,15 +221,12 @@ def generate_agent_reply(
         plan.recommended_actions = sections.get("recommended_actions", "")
 
     else:
-        logger.info("[generate_agent_reply] Using existing plan")
         plan = current_plan
 
     plan_dict = plan.to_dict()
 
     target_section = detect_target_section(user_message)
     wants_update = is_update_intent(user_message)
-
-    logger.info(f"[generate_agent_reply] target_section={target_section}, wants_update={wants_update}")
 
     history_lines = [
         f"{m.get('role','').upper()}: {m.get('content','')}"
@@ -303,54 +235,48 @@ def generate_agent_reply(
     history_text = "\n".join(history_lines)
 
     if target_section and wants_update:
-        logger.info(f"[generate_agent_reply] Updating section={target_section}")
         section_prompt = f"""
-{SYSTEM_INSTRUCTIONS}
+                            {SYSTEM_INSTRUCTIONS}
 
-Rewrite ONLY the '{target_section}' section.
+                            Rewrite ONLY the '{target_section}' section.
 
-Company: {company_name}
+                            Company: {company_name}
 
-Current text:
-{plan_dict.get(target_section)}
+                            Current text:
+                            {plan_dict.get(target_section)}
 
-User request:
-{user_message}
+                            User request:
+                            {user_message}
 
-Return ONLY the updated text.
-"""
+                            Return ONLY the updated text.
+                        """
         new_text = call_gemini(section_prompt).strip()
         setattr(plan, target_section, new_text)
 
         reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_text}"
 
     else:
-        logger.info("[generate_agent_reply] Generating natural answer")
         prompt = f"""
-{SYSTEM_INSTRUCTIONS}
+                    {SYSTEM_INSTRUCTIONS}
 
-Company: {company_name}
+                    Company: {company_name}
 
-Structured info:
-{plan_dict}
+                    Structured info:
+                    {plan_dict}
 
-Recent conversation:
-{history_text}
+                    Recent conversation:
+                    {history_text}
 
-User message:
-{user_message}
+                    User message:
+                    {user_message}
 
-Answer naturally and directly. Do not mention internal structures.
-"""
+                    Answer naturally and directly. Do not mention internal structures.
+                """
         reply = call_gemini(prompt)
-
-    logger.info("[generate_agent_reply] Reply generated")
 
     new_history = chat_history + [
         {"role": "user", "content": user_message},
         {"role": "assistant", "content": reply},
     ]
-
-    logger.info("[generate_agent_reply] History updated")
 
     return reply, plan, new_history
