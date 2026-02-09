@@ -31,7 +31,35 @@ def research_company(company_name: str):
     }
 
 
+def _get_empty_sections(raw_text: str = "") -> dict:
+    """Helper to return empty sections structure"""
+    return {
+        "overview": raw_text if raw_text else "",
+        "products_services": "",
+        "market_position": "",
+        "competitors": "",
+        "financial_snapshot": "",
+        "key_contacts": "",
+        "opportunities": "",
+        "risks": "",
+        "recommended_actions": ""
+    }
+
+
 def split_into_sections(raw_text: str) -> dict:
+    """
+    Split raw research text into structured sections using Gemini
+
+    Args:
+        raw_text: Raw text to split into sections
+
+    Returns:
+        Dict with structured sections
+    """
+    if not raw_text or not raw_text.strip():
+        logger.warning("Empty raw_text provided to split_into_sections")
+        return _get_empty_sections()
+
     prompt = f"""
                 Break the following research text into structured sections.
 
@@ -79,35 +107,46 @@ def split_into_sections(raw_text: str) -> dict:
                 {raw_text}
             """
 
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(prompt)
-
-    text = response.text.strip()
-
-    # Try to load JSON safely
-    import json
     try:
-        return json.loads(text)
-    except:
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        response = model.generate_content(prompt)
+
+        if not response or not response.text:
+            logger.error("Empty response from Gemini in split_into_sections")
+            return _get_empty_sections(raw_text)
+
+        text = response.text.strip()
+
+        # Try to load JSON safely
         try:
-            cleaned = text.replace("```json", "").replace("```", "")
-            return json.loads(cleaned)
-        except:
-            # Fallback in worst case
-            return {
-                "overview": raw_text,
-                "products_services": "",
-                "market_position": "",
-                "competitors": "",
-                "financial_snapshot": "",
-                "key_contacts": "",
-                "opportunities": "",
-                "risks": "",
-                "recommended_actions": ""
-            }
+            return json.loads(text)
+        except json.JSONDecodeError:
+            try:
+                cleaned = text.replace("```json", "").replace("```", "")
+                return json.loads(cleaned)
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error in split_into_sections: {e}")
+                return _get_empty_sections(raw_text)
+
+    except Exception as e:
+        logger.error(f"Error in split_into_sections: {e}")
+        return _get_empty_sections(raw_text)
 
 
 def complete_missing_sections(sections: dict) -> dict:
+    """
+    Complete or improve missing/weak sections using Gemini
+
+    Args:
+        sections: Dict of sections to improve
+
+    Returns:
+        Dict with completed sections
+    """
+    if not sections:
+        logger.warning("Empty sections dict provided to complete_missing_sections")
+        return _get_empty_sections()
+
     prompt = f"""
                     You are improving an account plan. Some sections may be empty or too short.
                     Rewrite and complete any weak sections while keeping:
@@ -125,17 +164,26 @@ def complete_missing_sections(sections: dict) -> dict:
                     {sections}
                 """
 
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(prompt)
-
-    text = response.text.strip()
-
-    import json
     try:
-        return json.loads(text)
-    except:
-        try:
-            cleaned = text.replace("```json", "").replace("```", "")
-            return json.loads(cleaned)
-        except:
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        response = model.generate_content(prompt)
+
+        if not response or not response.text:
+            logger.error("Empty response from Gemini in complete_missing_sections")
             return sections
+
+        text = response.text.strip()
+
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            try:
+                cleaned = text.replace("```json", "").replace("```", "")
+                return json.loads(cleaned)
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error in complete_missing_sections: {e}")
+                return sections
+
+    except Exception as e:
+        logger.error(f"Error in complete_missing_sections: {e}")
+        return sections

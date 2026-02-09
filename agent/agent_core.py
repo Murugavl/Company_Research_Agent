@@ -303,7 +303,7 @@ def generate_agent_reply(
 
     history_lines = [
         f"{m.get('role','').upper()}: {m.get('content','')}"
-        for m in chat_history[-6:]
+        for m in chat_history[-MAX_CHAT_HISTORY:]
     ]
     history_text = "\n".join(history_lines)
 

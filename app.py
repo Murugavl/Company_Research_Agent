@@ -104,16 +104,33 @@ with st.sidebar:
 user_msg = st.chat_input("Ask about any company...")
 
 if user_msg:
-    st.session_state.company = guess_company_name(user_msg, st.session_state.company)
-    with st.spinner("Working..."):
-        reply, plan, history = generate_agent_reply(
-            user_message=user_msg,
-            company_name=st.session_state.company,
-            current_plan=st.session_state.plan,
-            chat_history=st.session_state.chat_history,
-        )
-        st.session_state.plan = plan
-        st.session_state.chat_history = history
+    # Input validation
+    user_msg = user_msg.strip()
+
+    if not user_msg:
+        st.warning("Please enter a message")
+    elif len(user_msg) > 500:
+        st.warning("Message is too long. Please keep it under 500 characters.")
+    else:
+        st.session_state.company = guess_company_name(user_msg, st.session_state.company)
+
+        with st.spinner("Working..."):
+            try:
+                reply, plan, history = generate_agent_reply(
+                    user_message=user_msg,
+                    company_name=st.session_state.company,
+                    current_plan=st.session_state.plan,
+                    chat_history=st.session_state.chat_history,
+                )
+                st.session_state.plan = plan
+                st.session_state.chat_history = history
+                logger.info(f"Successfully processed message for company: {st.session_state.company}")
+            except Exception as e:
+                logger.error(f"Error processing user message: {e}", exc_info=True)
+                error_message = "I apologize, but I encountered an error while processing your request. Please try again."
+                st.session_state.chat_history.append({"role": "user", "content": user_msg})
+                st.session_state.chat_history.append({"role": "assistant", "content": error_message})
+                st.error(error_message)
 
 
 for m in st.session_state.chat_history:
