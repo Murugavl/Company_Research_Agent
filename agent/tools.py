@@ -2,12 +2,12 @@ import os
 import json
 import requests
 from dotenv import load_dotenv
-import google.generativeai as genai
+from groq import Groq
 from agent.logger import logger
 from config import GROQ_MODEL_NAME
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GROQ_API_KEY"))
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 TAVILY_KEY = os.getenv("TAVILY_API_KEY")
 
@@ -111,14 +111,18 @@ def split_into_sections(raw_text: str) -> dict:
             """
 
     try:
-        model = genai.GenerativeModel(GROQ_MODEL_NAME)
-        response = model.generate_content(prompt)
+        response = groq_client.chat.completions.create(
+            model=GROQ_MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.5,
+            max_tokens=2000
+        )
 
-        if not response or not response.text:
+        if not response or not response.choices:
             logger.error("Empty response from GROQ in split_into_sections")
             return _get_empty_sections(raw_text)
 
-        text = response.text.strip()
+        text = response.choices[0].message.content.strip()
 
         # Try to load JSON safely
         try:
@@ -168,14 +172,18 @@ def complete_missing_sections(sections: dict) -> dict:
                 """
 
     try:
-        model = genai.GenerativeModel(GROQ_MODEL_NAME)
-        response = model.generate_content(prompt)
+        response = groq_client.chat.completions.create(
+            model=GROQ_MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.5,
+            max_tokens=2000
+        )
 
-        if not response or not response.text:
+        if not response or not response.choices:
             logger.error("Empty response from GROQ in complete_missing_sections")
             return sections
 
-        text = response.text.strip()
+        text = response.choices[0].message.content.strip()
 
         try:
             return json.loads(text)

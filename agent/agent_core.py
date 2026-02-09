@@ -1,7 +1,7 @@
 import os
 from typing import List, Dict, Tuple, Optional
 
-import google.generativeai as genai
+from groq import Groq
 from dotenv import load_dotenv
 
 from .account_plan import AccountPlan
@@ -9,7 +9,7 @@ from .tools import research_company, split_into_sections, complete_missing_secti
 from config import MAX_CHAT_HISTORY
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GROQ_API_KEY"))
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 MODEL_NAME = "llama-3.1-8b-instant"
 
@@ -56,10 +56,14 @@ def is_update_intent(user_message: str) -> bool:
     return any(w in msg for w in UPDATE_KEYWORDS)
 
 
-def call_gemini(prompt: str) -> str:
-    model = genai.GenerativeModel(MODEL_NAME)
-    res = model.generate_content(prompt)
-    return res.text.strip() if res.text else ""
+def call_groq(prompt: str) -> str:
+    response = groq_client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_tokens=2000
+    )
+    return response.choices[0].message.content.strip() if response.choices else ""
 
 
 def normalize_company_name(raw_name: str) -> str:
@@ -73,9 +77,13 @@ def normalize_company_name(raw_name: str) -> str:
             "Return only the corrected name.\n\n"
             f"Name: {raw_name}"
         )
-        model = genai.GenerativeModel(MODEL_NAME)
-        res = model.generate_content(prompt)
-        name = (res.text or "").strip()
+        response = groq_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=50
+        )
+        name = response.choices[0].message.content.strip() if response.choices else ""
         if name:
             return name
     except Exception:
@@ -324,7 +332,7 @@ User request:
 
 Return ONLY the updated text.
 """
-        new_text = clean_list_response(call_gemini(update_prompt).strip())
+        new_text = clean_list_response(call_groq(update_prompt).strip())
         setattr(plan, target_section, new_text)
 
         reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_text}"
@@ -346,7 +354,7 @@ User message:
 
 Answer naturally and directly.
 """
-        reply = call_gemini(prompt)
+        reply = call_groq(prompt)
 
     new_history = chat_history + [
         {"role": "user", "content": user_message},
