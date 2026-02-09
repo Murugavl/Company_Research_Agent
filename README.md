@@ -71,7 +71,7 @@ Create a .env file in the project root:
     TAVILY_API_KEY=your_tavily_api_key
 
 ### 5. Run the application
-    streamlit run app.py
+    python -m streamlit run app.py
 
 **Open in browser:**
   
