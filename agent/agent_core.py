@@ -6,11 +6,12 @@ from dotenv import load_dotenv
 
 from .account_plan import AccountPlan
 from .tools import research_company, split_into_sections, complete_missing_sections
+from config import MAX_CHAT_HISTORY
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=os.getenv("GROQ_API_KEY"))
 
-MODEL_NAME = "gemini-2.0-flash"
+MODEL_NAME = "llama-3.1-8b-instant"
 
 SYSTEM_INSTRUCTIONS = """
 You are a company research assistant.

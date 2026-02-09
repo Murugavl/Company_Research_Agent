@@ -1,6 +1,14 @@
 import re
+import logging
 import streamlit as st
 from agent.agent_core import generate_agent_reply
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 st.set_page_config(page_title="Company Research Assistant", layout="wide")
 

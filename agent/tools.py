@@ -1,10 +1,13 @@
 import os
+import json
 import requests
 from dotenv import load_dotenv
 import google.generativeai as genai
+from agent.logger import logger
+from config import GROQ_MODEL_NAME
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=os.getenv("GROQ_API_KEY"))
 
 TAVILY_KEY = os.getenv("TAVILY_API_KEY")
 
@@ -48,7 +51,7 @@ def _get_empty_sections(raw_text: str = "") -> dict:
 
 def split_into_sections(raw_text: str) -> dict:
     """
-    Split raw research text into structured sections using Gemini
+    Split raw research text into structured sections using GROQ
 
     Args:
         raw_text: Raw text to split into sections
@@ -77,7 +80,7 @@ def split_into_sections(raw_text: str) -> dict:
                     - Cloud Services: Google Cloud Platform (GCP), Google Workspace
                     - Software & Platforms: Android, Chrome Browser, Maps, Gmail
                     - Hardware: Pixel devices, Nest smart-home products
-                    - AI & ML: Gemini AI, Vertex AI
+                    - AI & ML: GROQ AI, Vertex AI
 
                 3. market_position  
                 - Paragraph only (2–4 lines)
@@ -108,11 +111,11 @@ def split_into_sections(raw_text: str) -> dict:
             """
 
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        model = genai.GenerativeModel(GROQ_MODEL_NAME)
         response = model.generate_content(prompt)
 
         if not response or not response.text:
-            logger.error("Empty response from Gemini in split_into_sections")
+            logger.error("Empty response from GROQ in split_into_sections")
             return _get_empty_sections(raw_text)
 
         text = response.text.strip()
@@ -135,7 +138,7 @@ def split_into_sections(raw_text: str) -> dict:
 
 def complete_missing_sections(sections: dict) -> dict:
     """
-    Complete or improve missing/weak sections using Gemini
+    Complete or improve missing/weak sections using GROQ
 
     Args:
         sections: Dict of sections to improve
@@ -165,11 +168,11 @@ def complete_missing_sections(sections: dict) -> dict:
                 """
 
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        model = genai.GenerativeModel(GROQ_MODEL_NAME)
         response = model.generate_content(prompt)
 
         if not response or not response.text:
-            logger.error("Empty response from Gemini in complete_missing_sections")
+            logger.error("Empty response from GROQ in complete_missing_sections")
             return sections
 
         text = response.text.strip()

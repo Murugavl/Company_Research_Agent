@@ -10,12 +10,17 @@ RUN apt-get update && apt-get install -y \
 
 # Copy dependency list first (layer caching)
 COPY requirements.txt .
+
+# Upgrade pip before installing packages
+RUN python -m pip install --upgrade pip
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the project
 COPY . .
 
-# Expose streamlit port
+# Expose Streamlit port
 EXPOSE 8501
 
 # Ensure Streamlit binds to all interfaces
