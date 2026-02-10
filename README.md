@@ -1,10 +1,10 @@
 # Company Research Assistant
 
-An AI-powered assistant that researches companies, detects conflicting information, and generates structured account plans through natural conversation. Built with Streamlit, Gemini, and Tavily Search.
+An AI-powered assistant that researches companies, detects conflicting information, and generates structured account plans through natural conversation. Built with Streamlit, Groq, and Tavily Search.
 
 ## Features
 
-- **Automated Company Research** using Tavily + Gemini.
+- **Automated Company Research** using Tavily + Groq.
 - **Conflict Detection** that flags inconsistent information and asks the user whether to dig deeper.
 - **Structured Account Plan Generation** with sections such as:
   - Overview  
@@ -24,7 +24,7 @@ An AI-powered assistant that researches companies, detects conflicting informati
 1. User asks about a company.  
 2. The system normalizes the company name.  
 3. Tavily fetches multi-source information.  
-4. Gemini processes and summarizes the research.  
+4. Groq processes and summarizes the research.  
 5. Conflict detection checks for inconsistent or uncertain data.  
 6. If conflicts exist, the agent asks the user whether to dig deeper.  
 7. Otherwise, a complete account plan is generated.  
@@ -67,7 +67,7 @@ macOS/Linux
 ### 4. Add Environment Variables
 Create a .env file in the project root:
 
-    GEMINI_API_KEY=your_gemini_api_key
+    GROQ_API_KEY=your_groq_api_key
     TAVILY_API_KEY=your_tavily_api_key
 
 ### 5. Run the application
