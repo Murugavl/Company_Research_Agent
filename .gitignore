@@ -93,3 +93,7 @@ Thumbs.db
 # Local environment variables
 .env
 *.env
+*.log
+*.txt
+*.md
+*.pyc
