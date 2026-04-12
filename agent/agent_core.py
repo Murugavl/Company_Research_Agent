@@ -1,17 +1,21 @@
 import os
-from typing import List, Dict, Tuple, Optional
+import asyncio
+from typing import List, Dict, Tuple, Optional, Any
+from functools import lru_cache
 
 from groq import Groq
-from dotenv import load_dotenv
-
-from .account_plan import AccountPlan
+from models import AccountPlanModel as AccountPlan
 from .tools import research_company, split_into_sections, complete_missing_sections
-from config import MAX_CHAT_HISTORY
+from config import settings
+from .logger import logger
 
-load_dotenv()
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+# Phase 2.3 & 3.3 Imports
+from database.db import save_research, get_last_research
+from database.differ import diff_plans
 
-MODEL_NAME = "llama-3.1-8b-instant"
+groq_client = Groq(api_key=settings.GROQ_API_KEY)
+
+MODEL_NAME = settings.GROQ_MODEL_NAME
 
 SYSTEM_INSTRUCTIONS = """
 You are a company research assistant.
@@ -57,15 +61,20 @@ def is_update_intent(user_message: str) -> bool:
 
 
 def call_groq(prompt: str) -> str:
-    response = groq_client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
-        max_tokens=2000
-    )
-    return response.choices[0].message.content.strip() if response.choices else ""
+    try:
+        response = groq_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=2000
+        )
+        return response.choices[0].message.content.strip() if response.choices else ""
+    except Exception as e:
+        logger.error(f"Groq API call failed: {e}")
+        return ""
 
 
+@lru_cache(maxsize=100)
 def normalize_company_name(raw_name: str) -> str:
     raw_name = (raw_name or "").strip()
     if not raw_name:
@@ -80,7 +89,7 @@ def normalize_company_name(raw_name: str) -> str:
         response = groq_client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
+            temperature=0.1,
             max_tokens=50
         )
         name = response.choices[0].message.content.strip() if response.choices else ""
@@ -92,147 +101,36 @@ def normalize_company_name(raw_name: str) -> str:
     return " ".join(word.capitalize() for word in raw_name.split())
 
 
-# ------------------------------------------------------
-# 🟩 NEW FEATURE: RESEARCH PROGRESS + CONFLICT DETECTION
-# ------------------------------------------------------
-def progressive_research_company(company_name: str) -> Dict[str, str]:
-    progress_messages = []
-
-    progress_messages.append("Searching initial sources…")
-    base_data = research_company(company_name)
-
-    raw = base_data.get("raw_answer", "")
-
-    progress_messages.append("Analyzing information across multiple sources…")
-    sections = split_into_sections(raw)
+async def progressive_research_company(company_name: str) -> Dict[str, Any]:
+    """Perform tiered research with parallel processing for speed."""
+    logger.info(f"Starting progressive research for: {company_name}")
+    
+    # Tier 1: Initial Discovery
+    base_data = await research_company(company_name)
+    raw_text = base_data.get("raw_answer", "")
+    
+    # Tier 2: Parallel Analysis (CONCURENT)
+    # Both tools work on the raw text to extract and verify info
+    split_task = split_into_sections(raw_text, company_name)
+    complete_task = complete_missing_sections(raw_text, company_name)
+    
+    sections_base, sections_enriched = await asyncio.gather(split_task, complete_task)
+    
+    # Merge strategy: Enriched overwrites empty or generic base values
+    final_sections = sections_base.copy()
+    for k, v in sections_enriched.items():
+        if not final_sections.get(k) or len(str(final_sections.get(k))) < 20:
+            final_sections[k] = v
 
     conflicts = []
-
-    if "revenue" in raw.lower() and "$" not in raw:
+    if "revenue" in raw_text.lower() and "$" not in raw_text:
         conflicts.append("Revenue information appears unclear")
 
-    if "employees" in raw.lower() and "approx" in raw.lower():
-        conflicts.append("Employee count varies across sources")
-
-    if conflicts:
-        msg = " • ".join(conflicts)
-        progress_messages.append(f"Found conflicting data: {msg}. Should I dig deeper?")
-
     return {
-        "progress": progress_messages,
-        "raw": raw,
+        "raw": raw_text,
+        "sections": final_sections,
         "conflicts": conflicts
     }
-
-
-# ------------------------------------------------------
-# Rest of your existing helper functions stay the same
-# ------------------------------------------------------
-
-def _fallback_text(section: str, company_name: str) -> str:
-    c = company_name
-
-    if section == "overview":
-        return (
-            f"{c} is a major player in its industry, offering a wide range of solutions "
-            f"and operating across multiple markets. The company serves a large global "
-            f"customer base and continues to expand through innovation and investments."
-        )
-
-    if section == "products_services":
-        return (
-            "- Core products widely used by customers\n"
-            "- Cloud platforms and enterprise services\n"
-            "- Consumer and business applications\n"
-            "- Hardware or physical devices\n"
-            "- AI, analytics, and automation tools"
-        )
-
-    if section == "market_position":
-        return (
-            f"{c} holds a competitive position with strong brand recognition and presence "
-            f"in key industry segments."
-        )
-
-    if section == "competitors":
-        return (
-            "- Established industry players offering similar services\n"
-            "- Regional competitors\n"
-            "- Emerging technology-led startups"
-        )
-
-    if section == "financial_snapshot":
-        return (
-            f"{c}'s financials indicate diversified revenue streams and continuous "
-            f"investment into new growth areas."
-        )
-
-    if section == "key_contacts":
-        return (
-            "Key contacts include executives such as CEO, CTO, CFO, and department heads "
-            "in HR, IT, Finance, and Procurement."
-        )
-
-    if section == "opportunities":
-        return (
-            "- Expand into new regions\n"
-            "- Innovate and strengthen product portfolio\n"
-            "- Increase automation and operational efficiency"
-        )
-
-    if section == "risks":
-        return (
-            "- Competitive pressure\n"
-            "- Regulatory challenges\n"
-            "- Market uncertainty\n"
-            "- Rapid technology changes"
-        )
-
-    if section == "recommended_actions":
-        return (
-            f"- Engage {c} with tailored value propositions\n"
-            f"- Build long-term relationships with decision-makers\n"
-            f"- Provide ROI-driven case studies"
-        )
-
-    return ""
-
-
-def ensure_all_sections_filled(sections: Dict[str, str], company_name: str) -> Dict[str, str]:
-    required_keys = [
-        "overview",
-        "products_services",
-        "market_position",
-        "competitors",
-        "financial_snapshot",
-        "key_contacts",
-        "opportunities",
-        "risks",
-        "recommended_actions",
-    ]
-
-    result = {}
-
-    for key in required_keys:
-        value = sections.get(key, "")
-        text = str(value).strip() if value else ""
-        if not text or text.lower() in {"none", "null", "undefined"}:
-            text = _fallback_text(key, company_name)
-        result[key] = text
-
-    return result
-
-
-def clean_list_response(text: str) -> str:
-    if text.strip().startswith("[") and text.strip().endswith("]"):
-        try:
-            import ast
-            items = ast.literal_eval(text)
-            if isinstance(items, list):
-                return "\n".join(f"- {i}" for i in items)
-        except Exception:
-            pass
-    return text
 
 
 def get_last_company_from_history(chat_history: List[Dict[str, str]]) -> Optional[str]:
@@ -246,16 +144,15 @@ def get_last_company_from_history(chat_history: List[Dict[str, str]]) -> Optiona
     return None
 
 
-# ------------------------------------------------------
-# 🟦 MAIN FUNCTION — UPDATED WITH PROGRESS FEATURE
-# ------------------------------------------------------
-def generate_agent_reply(
+async def generate_agent_reply(
         user_message: str,
         company_name: str,
         current_plan: Optional[AccountPlan],
         chat_history: List[Dict[str, str]],
-    ) -> Tuple[str, AccountPlan, List[Dict[str, str]]]:
-
+        session_id: str  # Phase 3.3
+    ) -> Tuple[str, AccountPlan, List[Dict[str, str]], Dict[str, Any]]:
+    """Main entry point for agent logic. Async for concurrent tool usage."""
+    
     target_section = detect_target_section(user_message)
     wants_update = is_update_intent(user_message)
 
@@ -267,91 +164,73 @@ def generate_agent_reply(
         candidate = normalize_company_name(user_message)
         banned = {"can", "you", "tell", "about", "update", "its", "the", "edit"}
         if candidate and not any(w in banned for w in candidate.lower().split()):
-            current_plan = None
+            # If it's a new company, reset plan
+            if candidate != company_name:
+                current_plan = None
             company_name = candidate
 
     company_name = normalize_company_name(company_name)
+    diff_result = {}
 
-    # ------------------------------------------------------
-    # 🟩 APPLY PROGRESSIVE RESEARCH ONLY WHEN CREATING PLAN
-    # ------------------------------------------------------
     if current_plan is None:
-        plan = AccountPlan.empty(company_name)
-
-        progress = progressive_research_company(company_name)
-
-        progress_messages = progress["progress"]
-        raw_text = progress["raw"]
-        conflicts = progress["conflicts"]
-
-        sections = split_into_sections(raw_text)
-        sections = complete_missing_sections(sections)
-        sections = ensure_all_sections_filled(sections, company_name)
-
-        plan.overview = sections["overview"]
-        plan.products_services = sections["products_services"]
-        plan.market_position = sections["market_position"]
-        plan.competitors = sections["competitors"]
-        plan.financial_snapshot = sections["financial_snapshot"]
-        plan.key_contacts = sections["key_contacts"]
-        plan.opportunities = sections["opportunities"]
-        plan.risks = sections["risks"]
-        plan.recommended_actions = sections["recommended_actions"]
-
-        if conflicts:
-            return (
-                "\n".join(progress_messages),
-                plan,
-                chat_history + [{"role": "assistant", "content": "\n".join(progress_messages)}]
-            )
-
+        logger.info(f"Generating new plan for {company_name}")
+        
+        # Phase 2.3: Get last research before saving new one
+        last_research = get_last_research(company_name, session_id)
+        
+        research_data = await progressive_research_company(company_name)
+        
+        sections = research_data["sections"]
+        plan = AccountPlan(
+            company_name=company_name,
+            overview=sections.get("overview", ""),
+            products_services=sections.get("products_services", ""),
+            market_position=sections.get("market_position", ""),
+            competitors=sections.get("competitors", ""),
+            financial_snapshot=sections.get("financial_snapshot", ""),
+            key_contacts=sections.get("key_contacts", ""),
+            opportunities=sections.get("opportunities", ""),
+            risks=sections.get("risks", ""),
+            recommended_actions=sections.get("recommended_actions", "")
+        )
+        
+        # Phase 2.3: Save new research and calculate diff
+        current_data = plan.model_dump()
+        save_research(company_name, current_data, session_id)
+        
+        if last_research:
+            diff_result = diff_plans(last_research, current_data)
+            
     else:
         plan = current_plan
 
-    plan_dict = plan.to_dict()
-
+    plan_dict = plan.model_dump()
     history_lines = [
         f"{m.get('role','').upper()}: {m.get('content','')}"
-        for m in chat_history[-MAX_CHAT_HISTORY:]
+        for m in chat_history[-settings.MAX_CHAT_HISTORY:]
     ]
     history_text = "\n".join(history_lines)
 
     if target_section and wants_update:
+        logger.info(f"Updating section: {target_section} for {company_name}")
         update_prompt = f"""
 {SYSTEM_INSTRUCTIONS}
-
 Rewrite ONLY the '{target_section}' section.
-
 Company: {company_name}
-
-Current text:
-{plan_dict.get(target_section)}
-
-User request:
-{user_message}
-
+Current text: {plan_dict.get(target_section)}
+User request: {user_message}
 Return ONLY the updated text.
 """
-        new_text = clean_list_response(call_groq(update_prompt).strip())
+        new_text = call_groq(update_prompt).strip()
         setattr(plan, target_section, new_text)
-
         reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_text}"
-
     else:
         prompt = f"""
 {SYSTEM_INSTRUCTIONS}
-
 Company: {company_name}
-
-Structured info:
-{plan_dict}
-
-Recent conversation:
-{history_text}
-
-User message:
-{user_message}
-
+Structured info: {plan_dict}
+Recent conversation: {history_text}
+User message: {user_message}
 Answer naturally and directly.
 """
         reply = call_groq(prompt)
@@ -361,4 +240,4 @@ Answer naturally and directly.
         {"role": "assistant", "content": reply},
     ]
 
-    return reply, plan, new_history
+    return reply, plan, new_history, diff_result

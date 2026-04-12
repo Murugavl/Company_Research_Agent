@@ -6,7 +6,6 @@ services:
     ports:
       - "8501:8501"
     environment:
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
       TAVILY_API_KEY: ${TAVILY_API_KEY}
     env_file:
       - .env

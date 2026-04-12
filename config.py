@@ -1,47 +1,42 @@
 """
 Configuration settings for Company Research Agent
 """
-import os
-from dotenv import load_dotenv
+from typing import Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
-load_dotenv()
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
-# API Configuration
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+    # API Configuration (Required)
+    GROQ_API_KEY: str = Field(..., description="API key for Groq")
+    TAVILY_API_KEY: str = Field(..., description="API key for Tavily Search")
 
-# Model Settings
-GROQ_MODEL_NAME = os.getenv("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
+    # Model Settings
+    GROQ_MODEL_NAME: str = Field(default="llama-3.3-70b-versatile")
 
-# Search Settings
-TAVILY_MAX_RESULTS = int(os.getenv("TAVILY_MAX_RESULTS", "5"))
+    # Search Settings
+    TAVILY_MAX_RESULTS: int = Field(default=5)
 
-# Chat Settings
-MAX_CHAT_HISTORY = int(os.getenv("MAX_CHAT_HISTORY", "6"))
+    # Chat Settings
+    MAX_CHAT_HISTORY: int = Field(default=6)
 
-# Logging
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    # Logging
+    LOG_LEVEL: str = Field(default="INFO")
 
-# Validate required API keys
-def validate_config():
-    """Validate that required configuration is present"""
-    errors = []
-
-    if not GROQ_API_KEY:
-        errors.append("GROQ_API_KEY is not set in environment variables")
-
-    if not TAVILY_API_KEY:
-        errors.append("TAVILY_API_KEY is not set in environment variables")
-
-    if errors:
-        raise ValueError(
-            "Configuration errors:\n" + "\n".join(f"  - {e}" for e in errors)
-        )
-
-# Run validation on import
+# Initialize settings
 try:
-    validate_config()
-except ValueError as e:
+    settings = Settings()
+except Exception as e:
+    import sys
     print(f"⚠️  Configuration Error: {e}")
-    print("Please create a .env file with required API keys (see .env.example)")
+    print("\nPlease ensure you have a .env file with the following required keys:")
+    print("  - GROQ_API_KEY")
+    print("  - TAVILY_API_KEY")
+    print("\nSee .env.example for a template.")
+    sys.exit(1) # Critical for startup validation
 
