@@ -15,7 +15,7 @@ if settings.LANGCHAIN_TRACING_V2.lower() == "true":
     os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
 
 def create_research_graph():
-    """Builds and compiles the research workflow graph."""
+    """Builds and compiles the research workflow graph using StateGraph."""
     workflow = StateGraph(AgentState)
     
     # Add Nodes
@@ -27,20 +27,25 @@ def create_research_graph():
     workflow.add_node("reply", node_reply)
     workflow.add_node("save", node_save)
     
-    # Define Edges
+    # Define Edges as per request:
+    # START → node_normalize
     workflow.add_edge(START, "normalize")
+    # node_normalize → node_research
     workflow.add_edge("normalize", "research")
     
-    # Parallel Fan-out: research -> split AND research -> complete
+    # Parallel start: node_research → node_split AND node_research → node_complete
     workflow.add_edge("research", "split")
     workflow.add_edge("research", "complete")
     
-    # Fan-in: split -> merge AND complete -> merge
+    # Merging back: node_split → node_merge AND node_complete → node_merge
     workflow.add_edge("split", "merge")
     workflow.add_edge("complete", "merge")
     
+    # Continue chain: node_merge → node_reply
     workflow.add_edge("merge", "reply")
+    # node_reply → node_save
     workflow.add_edge("reply", "save")
+    # node_save → END
     workflow.add_edge("save", END)
     
     return workflow.compile()

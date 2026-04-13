@@ -1,6 +1,3 @@
-"""
-Configuration settings for Company Research Agent
-"""
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
@@ -39,9 +36,4 @@ try:
 except Exception as e:
     import sys
     print(f"⚠️  Configuration Error: {e}")
-    print("\nPlease ensure you have a .env file with the following required keys:")
-    print("  - GROQ_API_KEY")
-    print("  - TAVILY_API_KEY")
-    print("\nSee .env.example for a template.")
-    sys.exit(1) # Critical for startup validation
-
+    sys.exit(1)

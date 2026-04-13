@@ -1,5 +1,5 @@
 import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from .state import AgentState
 from .tools import research_company, split_into_sections, complete_missing_sections
 from database.db import get_last_research, save_research
@@ -34,6 +34,7 @@ async def node_merge(state: AgentState) -> Dict:
     
     merged = sb.copy()
     for k, v in se.items():
+        # Enriched overwrites short/empty base values < 20 chars
         if not merged.get(k) or len(str(merged.get(k))) < 20:
             merged[k] = v
             
@@ -46,19 +47,14 @@ async def node_reply(state: AgentState) -> Dict[str, Any]:
     plan_dict = state["final_sections"]
     history = state["chat_history"]
     
-    history_lines = [
-        f"{m.get('role','').upper()}: {m.get('content','')}"
-        for m in history[-settings.MAX_CHAT_HISTORY:]
-    ]
-    history_text = "\n".join(history_lines)
-    
     prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 Company: {state['company_name']}
 Structured info: {plan_dict}
-Recent conversation: {history_text}
+Chat History: {history}
 User message: {state['user_message']}
-Answer naturally and directly.
+
+Answer naturally and professionally based on the research.
 """
     reply_text = call_groq(prompt)
     return {"reply": reply_text}
@@ -70,6 +66,7 @@ async def node_save(state: AgentState) -> Dict:
     current_data = state["final_sections"].copy()
     current_data["company_name"] = company_name
     
+    # Calls get_last_research before saving to compare
     last_research = get_last_research(company_name, session_id)
     save_research(company_name, current_data, session_id)
     

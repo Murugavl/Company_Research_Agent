@@ -110,7 +110,7 @@ async def generate_agent_reply(
     ) -> Tuple[str, AccountPlan, List[Dict[str, str]], Dict[str, Any]]:
     """
     Main entry point for agent logic. 
-    Now uses LangGraph for the research orchestration.
+    Uses LangGraph for the research orchestration.
     """
     
     target_section = detect_target_section(user_message)
@@ -130,7 +130,7 @@ async def generate_agent_reply(
 
     company_name = normalize_company_name(company_name)
 
-    # If it's a specific section update request on an existing plan
+    # Specific section update request on an existing plan
     if current_plan and target_section and wants_update:
         logger.info(f"Rapid update for section: {target_section} - {company_name}")
         plan_dict = current_plan.model_dump()
@@ -152,7 +152,7 @@ Return ONLY the updated text.
         ]
         return reply, current_plan, new_history, {}
 
-    # Otherwise, perform/refresh research using LangGraph
+    # Otherwise, perform research using LangGraph
     logger.info(f"Invoking research graph for {company_name}")
     
     initial_state = {
