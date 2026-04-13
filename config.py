@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = Field(default="INFO")
 
+    # LangSmith Tracing
+    LANGCHAIN_API_KEY: Optional[str] = Field(default=None)
+    LANGCHAIN_TRACING_V2: str = Field(default="false")
+    LANGCHAIN_PROJECT: str = Field(default="company-research-agent")
+
 # Initialize settings
 try:
     settings = Settings()

@@ -5,8 +5,16 @@ services:
     build: .
     ports:
       - "8501:8501"
-    environment:
-      TAVILY_API_KEY: ${TAVILY_API_KEY}
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
     env_file:
       - .env
     volumes:

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from agent.agent_core import generate_agent_reply
 from database.db import get_research_history
 from models import AccountPlanModel
-from .dependencies import validate_session_id
+from backend.dependencies import validate_session_id
 
 router = APIRouter(prefix="/api")
 
