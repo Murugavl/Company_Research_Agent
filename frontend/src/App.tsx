@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
 import { 
   Card, CardContent, CardHeader, CardTitle, 
@@ -15,7 +13,7 @@ import { researchCompany, generateSessionId } from "@/lib/api";
 import { ChatMessage, AccountPlan, DiffResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export default function CompanyResearchPage() {
+function App() {
   const [sessionId] = useState(() => generateSessionId());
   const [userMessage, setUserMessage] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -123,9 +121,9 @@ export default function CompanyResearchPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background selection:bg-primary/20">
+    <div className="flex flex-col h-screen bg-background selection:bg-primary/20 dark">
       {/* Header */}
-      <header className="flex items-center justify-between px-8 py-5 border-b border-border/50 bg-card/30 backdrop-blur-xl sticky top-0 z-10">
+      <header className="flex items-center justify-between px-8 py-5 border-b border-border/50 bg-card/30 backdrop-blur-xl sticky top-0 z-10 text-foreground">
         <div className="flex items-center gap-4">
           <div className="p-2.5 bg-primary/20 rounded-xl shadow-inner">
             <TrendingUp className="w-6 h-6 text-primary" />
@@ -134,7 +132,7 @@ export default function CompanyResearchPage() {
             Company Intelligence Agent
           </h1>
           {companyName && (
-            <Badge className="ml-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary border-primary/20 font-bold transition-all animate-in fade-in zoom-in duration-300">
+            <Badge className="ml-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary border-primary/20 font-bold transition-all">
               {companyName}
             </Badge>
           )}
@@ -160,7 +158,7 @@ export default function CompanyResearchPage() {
                   </div>
                   <div className="space-y-2">
                     <p className="text-2xl font-bold">Awaiting Strategy</p>
-                    <p className="text-muted-foreground max-w-sm px-4">
+                    <p className="text-muted-foreground max-w-sm px-4 text-foreground/60">
                       Enter a company name below to begin deep-dive research into products, financials, and competitors.
                     </p>
                   </div>
@@ -180,9 +178,9 @@ export default function CompanyResearchPage() {
                 </div>
               ))}
               {isLoading && (
-                <div className="flex items-start gap-4 animate-pulse">
+                <div className="flex items-start gap-4">
                   <div className="p-2.5 rounded-xl bg-card border border-border/40">
-                    <Bot className="w-4 h-4 text-primary/40" />
+                    <Bot className="w-4 h-4 text-primary/40 animate-pulse" />
                   </div>
                   <div className="bg-card/50 border border-border/40 rounded-3xl rounded-tl-none px-5 py-4">
                     <div className="flex gap-2">
@@ -207,7 +205,7 @@ export default function CompanyResearchPage() {
             <div className="max-w-2xl mx-auto relative group">
               <Input
                 placeholder="Ask about a company (e.g. 'Generate a brief for Groq')..."
-                className="pr-14 py-8 rounded-2xl border-border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all font-medium text-lg placeholder:text-muted-foreground/60 shadow-lg group-hover:border-primary/30"
+                className="pr-14 py-8 rounded-2xl border-border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all font-medium text-lg placeholder:text-muted-foreground/60 shadow-lg group-hover:border-primary/30 text-foreground"
                 value={userMessage}
                 onChange={(e) => setUserMessage(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
@@ -219,7 +217,7 @@ export default function CompanyResearchPage() {
                 disabled={!userMessage.trim() || isLoading}
                 className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl h-12 w-12 bg-primary hover:bg-primary/90 transition-all shadow-xl active:scale-90"
               >
-                <Send className="w-5 h-5" />
+                <Send className="w-5 h-5 text-white" />
               </Button>
             </div>
           </div>
@@ -235,14 +233,14 @@ export default function CompanyResearchPage() {
                     <Building2 className="w-20 h-20 text-primary/20" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-2xl font-bold">Research Portal</h3>
+                    <h3 className="text-2xl font-bold text-foreground">Research Portal</h3>
                     <p className="text-muted-foreground max-w-md mx-auto leading-relaxed">
                       Structured intelligence reports including market analysis, competitor landscapes, and strategic recommendations will populate here.
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-10 pb-16 animate-in fade-in slide-in-from-bottom-8 duration-1000">
+                <div className="space-y-10 pb-16 text-foreground">
                   {Object.keys(diffResult).length > 0 && (
                     <Alert className="bg-primary/5 border-primary/20 rounded-2xl px-6 py-5 shadow-sm">
                       <AlertCircle className="w-5 h-5 text-primary" />
@@ -300,3 +298,5 @@ export default function CompanyResearchPage() {
     </div>
   );
 }
+
+export default App;

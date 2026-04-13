@@ -1,14 +1,20 @@
+import os
+import sys
+
+# Add the current directory to sys.path to handle imports correctly in the restructured layout
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routers import research
+from routers import research
 from database.db import init_db
 
 app = FastAPI(title="Company Research Agent API")
 
-# Enable CORS for localhost:3000
+# Enable CORS for localhost:5173 (Vite default)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

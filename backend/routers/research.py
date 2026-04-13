@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, Field
+
+# Updated imports for consolidated backend structure
 from agent.agent_core import generate_agent_reply
 from database.db import get_research_history
 from models import AccountPlanModel
-from backend.dependencies import validate_session_id
+from dependencies import validate_session_id
 
 router = APIRouter(prefix="/api")
 
