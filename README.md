@@ -1,99 +1,71 @@
-# Company Research Assistant
+# Company Intelligence Research Agent
 
-An AI-powered assistant that researches companies, detects conflicting information, and generates structured account plans through natural conversation. Built with Streamlit, Groq, and Tavily Search.
+A powerful, distributed AI agent designed to perform deep-dive company research, competitor analysis, and strategic opportunity identification.
 
-## Features
+## 🚀 Project Overview
 
-- **Automated Company Research** using Tavily + Groq.
-- **Conflict Detection** that flags inconsistent information and asks the user whether to dig deeper.
-- **Structured Account Plan Generation** with sections such as:
-  - Overview  
-  - Products & Services  
-  - Market Position  
-  - Competitors  
-  - Financial Snapshot  
-  - Key Contacts  
-  - Opportunities  
-  - Risks  
-  - Recommended Actions
-- **Section-Level Updates** where the user can rewrite only the part they want.
-- **Chat-Based Interaction** with professional, concise responses.
+This application leverages **LangGraph** to orchestrate a sophisticated research workflow. It performs real-time web searching, structured data extraction, and quality-controlled merging to produce comprehensive intelligence reports.
 
-## How It Works (Workflow)
+### ✨ Key Features
+- **Deterministic Orchestration**: Uses LangGraph StateGraph for reliable, traceable AI workflows.
+- **Real-time Intelligence**: Integrates Tavily Search for up-to-the-minute company data.
+- **Structured Reporting**: Automatically generates deep-dive reports across 9 strategic sections.
+- **Delta Analysis**: Detects and highlights changes between research sessions.
+- **Modern UI**: A premium React-based dashboard with real-time chat and structured data views.
 
-1. User asks about a company.  
-2. The system normalizes the company name.  
-3. Tavily fetches multi-source information.  
-4. Groq processes and summarizes the research.  
-5. Conflict detection checks for inconsistent or uncertain data.  
-6. If conflicts exist, the agent asks the user whether to dig deeper.  
-7. Otherwise, a complete account plan is generated.  
-8. User can modify any section with follow-up instructions.
+## 🛠️ Tech Stack
 
-## Project Structure
-    app.py  
-    agent/
-    ├── agent_core.py
-    ├── tools.py
-    ├── account_plan.py
-    └── logger.py
-    requirements.txt
-    Dockerfile
-    docker-compose.yml
-    .env
-    README.md
+### Backend (`/backend`)
+- **FastAPI**: High-performance Python API framework.
+- **LangGraph**: Workflow orchestration for the research agent.
+- **Groq (Llama 3)**: High-speed LLM inference.
+- **Redis**: Distributed caching for search results.
+- **SQLite**: Local persistence for research history.
 
-## Installation
+### Frontend (`/frontend`)
+- **React 18**: Modern UI library.
+- **Vite**: Ultra-fast build tool and dev server.
+- **Tailwind CSS**: Utility-first styling with dark mode support.
+- **Lucide React**: Premium iconography.
 
-### 1. Clone the repository
+## 🏁 Getting Started
 
-    git clone https://github.com/Murugavl/Company_Research_Agent.git
-    
-    cd Company_Research_Agent
+### Prerequisites
+- Python 3.10+
+- Node.js 18+
+- Docker (for Redis)
 
-### 2. Create & Activate a Virtual Environment
-Windows
+### Quick Start (Local)
 
-    python -m venv venv
-    venv\Scripts\activate
-macOS/Linux
+1.  **Start Redis**:
+    ```bash
+    docker run -d -p 6379:6379 redis:7-alpine
+    ```
 
-    python3 -m venv venv
-    source venv/bin/activate
+2.  **Configure Backend**:
+    - Go to `backend/`
+    - Create `.env` from `.env.example`
+    - Add your `GROQ_API_KEY` and `TAVILY_API_KEY`
+    - Install dependencies: `pip install -r requirements.txt`
+    - Start server: `python -m uvicorn main:app --reload` (from root using `$env:PYTHONPATH="."`)
 
-### 3. Install Dependencies
-    pip install -r requirements.txt
+3.  **Configure Frontend**:
+    - Go to `frontend/`
+    - Install dependencies: `npm install`
+    - Start dev server: `npm run dev`
 
-### 4. Add Environment Variables
-Create a .env file in the project root:
+Visit `http://localhost:5173` to start researching.
 
-    GROQ_API_KEY=your_groq_api_key
-    TAVILY_API_KEY=your_tavily_api_key
-
-### 5. Run the application
-    python -m streamlit run app.py
-
-**Open in browser:**
-  
-    http://localhost:8501/
-
-## Docker Setup
-#### Build image
-    docker build -t research-agent .
-
-#### Run container
-    docker run -p 8501:8501 --env-file .env research-agent
-
-#### Open in browser:
-  
-    http://localhost:8501/
-
-## Usage Example
-
-**User:** tell me about Eightfold AI  
-
-**Assistant:** Provides an overview + structured summary.
-
-**User:**  update its risks  
-
-**Assistant:**  Returns only the updated *Risks* section.
+## 📁 Project Structure
+```text
+Company_Research_Agent/
+├── backend/            # Python FastAPI & Agent logic
+│   ├── agent/          # LangGraph definitions
+│   ├── database/       # SQLite & logic
+│   ├── routers/        # API endpoints
+│   └── .env            # Private keys
+├── frontend/           # React + Vite frontend
+│   ├── src/            # Components & App logic
+│   └── tailwind.config.js
+└── docker-compose.yml  # Full stack orchestration
+```

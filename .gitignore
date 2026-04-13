@@ -1,17 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Environment variables
-.env
-.env.local
-.env.*.local
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -31,69 +22,44 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
-#  Usually these files are written by PyInstaller
-#  after building an executable.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# Virtual environments
+# Virtual Environments
 venv/
 env/
 .venv/
 .env/
 
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints
-
-# IDE / Editor
-# VS Code
-.vscode/
-# PyCharm
+# IDEs
 .idea/
+.vscode/
 *.iml
+*.swp
+*.swo
 
-# Mac / Windows OS files
+# Project Specific
+backend/.env
+backend/*.db
+logs/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Build logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS Files
 .DS_Store
 Thumbs.db
-
-# Local environment variables
-.env
-*.env
-*.log
-*.txt
-*.md
-*.pyc
+desktop.ini

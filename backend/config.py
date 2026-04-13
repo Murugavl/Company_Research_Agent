@@ -1,10 +1,14 @@
+import os
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
+# Get directory of current file (backend/)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", 
+        env_file=os.path.join(BASE_DIR, ".env"), 
         env_file_encoding="utf-8",
         extra="ignore"
     )
@@ -38,5 +42,6 @@ try:
     settings = Settings()
 except Exception as e:
     import sys
-    print(f"⚠️  Configuration Error: {e}")
+    # Use ASCII for terminal compatibility
+    print(f"Configuration Error: {e}")
     sys.exit(1)

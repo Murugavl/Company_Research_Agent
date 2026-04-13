@@ -80,11 +80,12 @@ Separator.displayName = "Separator"
 export { Separator }
 
 // --- ScrollArea Component ---
-const ScrollArea = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("relative overflow-auto", className)} {...props}>
+const ScrollArea = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, children, ...props }, ref) => (
+  <div ref={ref} className={cn("relative overflow-auto", className)} {...props}>
     {children}
   </div>
-)
+))
+ScrollArea.displayName = "ScrollArea"
 export { ScrollArea }
 
 // --- Input & Textarea Components ---

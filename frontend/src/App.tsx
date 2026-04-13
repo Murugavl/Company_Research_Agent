@@ -10,7 +10,7 @@ import {
   ShieldAlert, Lightbulb, Target, Briefcase 
 } from "lucide-react";
 import { researchCompany, generateSessionId } from "@/lib/api";
-import { ChatMessage, AccountPlan, DiffResult } from "@/lib/types";
+import type { ChatMessage, AccountPlan, DiffResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function App() {
