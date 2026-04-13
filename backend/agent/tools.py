@@ -5,7 +5,7 @@ import asyncio
 import hashlib
 import httpx
 from typing import Dict, Any, Optional, Type
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, Field
 import redis.asyncio as aioredis
 from groq import Groq
 from agent.logger import logger
@@ -22,16 +22,16 @@ redis_client = aioredis.from_url(
 )
 
 class PartialPlan(BaseModel):
-    """Pydantic model for structured research sections."""
-    overview: str
-    products_services: str
-    market_position: str
-    competitors: str
-    financial_snapshot: str
-    key_contacts: str
-    opportunities: str
-    risks: str
-    recommended_actions: str
+    """Pydantic model for structured research sections with defaults."""
+    overview: str = Field(default="")
+    products_services: str = Field(default="")
+    market_position: str = Field(default="")
+    competitors: str = Field(default="")
+    financial_snapshot: str = Field(default="")
+    key_contacts: str = Field(default="")
+    opportunities: str = Field(default="")
+    risks: str = Field(default="")
+    recommended_actions: str = Field(default="")
 
 async def safe_json_parser(text: str, model: Type[BaseModel]) -> Dict[str, Any]:
     """

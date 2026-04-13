@@ -32,6 +32,18 @@ def init_db():
         """)
         conn.commit()
 
+def _stringify(value: Any) -> str:
+    """Helper to convert any research value into a string for SQLite."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (list, tuple)):
+        # Join lists into bullet points or newline-separated strings
+        return "\n".join([str(item) for item in value])
+    # Fallback to JSON for dicts or other types
+    return json.dumps(value)
+
 def save_research(company: str, plan: Dict[str, Any], session_id: str) -> None:
     """Save a research result linked to a specific session."""
     init_db()  # Ensure table exists
@@ -47,15 +59,15 @@ def save_research(company: str, plan: Dict[str, Any], session_id: str) -> None:
             session_id,
             company,
             datetime.now().isoformat(),
-            plan.get("overview"),
-            plan.get("products_services"),
-            plan.get("market_position"),
-            plan.get("competitors"),
-            plan.get("financial_snapshot"),
-            plan.get("key_contacts"),
-            plan.get("opportunities"),
-            plan.get("risks"),
-            plan.get("recommended_actions")
+            _stringify(plan.get("overview")),
+            _stringify(plan.get("products_services")),
+            _stringify(plan.get("market_position")),
+            _stringify(plan.get("competitors")),
+            _stringify(plan.get("financial_snapshot")),
+            _stringify(plan.get("key_contacts")),
+            _stringify(plan.get("opportunities")),
+            _stringify(plan.get("risks")),
+            _stringify(plan.get("recommended_actions"))
         ))
         conn.commit()
 

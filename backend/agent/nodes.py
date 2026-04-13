@@ -15,7 +15,13 @@ async def node_normalize(state: AgentState) -> Dict:
 async def node_research(state: AgentState) -> Dict:
     """Perform initial web research using Tavily."""
     res = await research_company(state["company_name"])
-    return {"raw_research": res.get("raw_answer", "")}
+    
+    # Aggregate answer and snippets from results for better context
+    answer = res.get("raw_answer", "")
+    snippets = "\n".join([f"- {r.get('content', '')}" for r in res.get("sources", [])])
+    
+    combined = f"{answer}\n\nRELEVANT SNIPPETS:\n{snippets}"
+    return {"raw_research": combined.strip()}
 
 async def node_split(state: AgentState) -> Dict:
     """Analyze raw research and split into structured sections."""
