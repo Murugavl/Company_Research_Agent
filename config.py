@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     LANGCHAIN_TRACING_V2: str = Field(default="false")
     LANGCHAIN_PROJECT: str = Field(default="company-research-agent")
 
+    # Redis Cache
+    REDIS_URL: str = Field(default="redis://localhost:6379")
+
 # Initialize settings
 try:
     settings = Settings()

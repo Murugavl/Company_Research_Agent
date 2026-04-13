@@ -51,3 +51,12 @@ def temp_db():
     """)
     yield conn
     conn.close()
+
+@pytest.fixture(autouse=True)
+def mock_redis(mocker):
+    """Mocks redis_client in agent.tools for all tests."""
+    mock = AsyncMock()
+    mock.get.return_value = None
+    mock.setex.return_value = True
+    mocker.patch("agent.tools.redis_client", mock)
+    return mock

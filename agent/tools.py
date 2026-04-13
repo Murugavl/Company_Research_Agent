@@ -2,10 +2,11 @@ import os
 import json
 import re
 import asyncio
+import hashlib
 import httpx
 from typing import Dict, Any, Optional, Type
 from pydantic import BaseModel, ValidationError
-from cachetools import TTLCache
+import redis.asyncio as aioredis
 from groq import Groq
 from agent.logger import logger
 from config import settings
@@ -14,8 +15,11 @@ from models import AccountPlanModel
 # Initialize Groq client once at module level
 groq_client = Groq(api_key=settings.GROQ_API_KEY)
 
-# Caching for search results (1 hour TTL)
-search_cache = TTLCache(maxsize=100, ttl=3600)
+# Redis client for search result caching
+redis_client = aioredis.from_url(
+    settings.REDIS_URL,
+    decode_responses=True
+)
 
 class PartialPlan(BaseModel):
     """Pydantic model for structured research sections."""
@@ -61,9 +65,15 @@ async def safe_json_parser(text: str, model: Type[BaseModel]) -> Dict[str, Any]:
         return data  # Fallback to raw data if validation fails but format is correct
 
 async def tavily_search(query: str):
-    if query in search_cache:
-        logger.info(f"Using cached result for query: {query}")
-        return search_cache[query]
+    cache_key = f"tavily:{hashlib.md5(query.encode()).hexdigest()}"
+    
+    try:
+        cached = await redis_client.get(cache_key)
+        if cached:
+            logger.info(f"Using cached result for query: {query}")
+            return json.loads(cached)
+    except Exception as e:
+        logger.warning(f"Cache lookup failed: {e}")
 
     url = "https://api.tavily.com/search"
     payload = {
@@ -78,7 +88,13 @@ async def tavily_search(query: str):
             res = await client.post(url, json=payload, timeout=20.0)
             res.raise_for_status()
             data = res.json()
-            search_cache[query] = data
+            
+            # Cache for 1 hour (3600 seconds)
+            try:
+                await redis_client.setex(cache_key, 3600, json.dumps(data))
+            except Exception as e:
+                logger.warning(f"Cache save failed: {e}")
+                
             return data
         except Exception as e:
             logger.error(f"Tavily search failed: {e}")
