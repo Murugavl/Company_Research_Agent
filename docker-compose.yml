@@ -1,15 +1,7 @@
 version: "3.9"
 
 services:
-  research-agent:
-    build: .
-    ports:
-      - "8501:8501"
-    env_file:
-      - .env
-    volumes:
-      - .:/app
-
+  # Python FastAPI Backend
   backend:
     build: .
     ports:
@@ -19,3 +11,19 @@ services:
       - .env
     volumes:
       - .:/app
+
+  # Next.js 15 Frontend
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+# Note: Streamlit research-agent was removed in Phase 3 migration
