@@ -332,17 +332,6 @@ Return ONLY the updated text.
 {SYSTEM_INSTRUCTIONS}
 Company: {initial_state['company_name']}
 Structured info: {plan_dict}
-Chat History: {history}
-User message: {state['user_message']}
-
-Answer naturally and professionally based on the research.
-"""
-        # Wait, I need to fix the variable names in the prompt above
-        # History is initial_state["chat_history"], etc.
-        prompt = f"""
-{SYSTEM_INSTRUCTIONS}
-Company: {initial_state['company_name']}
-Structured info: {plan_dict}
 Chat History: {initial_state['chat_history']}
 User message: {initial_state['user_message']}
 
