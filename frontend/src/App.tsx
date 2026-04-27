@@ -1,19 +1,25 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Card, CardContent, CardHeader, CardTitle, 
   Badge, Button, ScrollArea, Input, 
-  Alert, AlertTitle, AlertDescription, Separator 
 } from "@/components/ui";
 import { 
   Send, RotateCcw, Building2, User, 
-  Bot, AlertCircle, TrendingUp, Users, 
+  Bot, TrendingUp, Users, 
   ShieldAlert, Lightbulb, Target, Briefcase,
-  Sparkles, ChevronRight, Activity, Globe
+  Sparkles, ChevronRight, Activity, Globe,
+  AlertCircle, History, MessageSquare, LayoutGrid
 } from "lucide-react";
-import { researchCompany, generateSessionId } from "@/lib/api";
+import { researchCompanyStream, generateSessionId } from "@/lib/api";
 import type { ChatMessage, AccountPlan, DiffResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+// New Components
+import { useToast } from "@/hooks/useToast";
+import { ToastContainer } from "@/components/ToastContainer";
+import { ExportButton } from "@/components/ExportButton";
+import { HistoryPanel } from "@/components/HistoryPanel";
+import { PlanSkeleton } from "@/components/PlanSkeleton";
 
 function App() {
   const [sessionId] = useState(() => generateSessionId());
@@ -23,43 +29,71 @@ function App() {
   const [plan, setPlan] = useState<AccountPlan | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResult>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const [streamingReply, setStreamingReply] = useState("");
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "plan">("chat");
+  
+  const { toasts, addToast, removeToast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [chatHistory]);
+  }, [chatHistory, streamingReply]);
+
+  useEffect(() => {
+    if (plan && window.innerWidth < 1024) {
+      setActiveMobileTab("plan");
+    }
+  }, [plan]);
 
   const handleSend = async () => {
     if (!userMessage.trim() || isLoading) return;
 
     const currentMsg = userMessage;
     setUserMessage("");
-    setError(null);
     setIsLoading(true);
+    setStreamingReply("");
 
     const newUserMessage: ChatMessage = { role: "user", content: currentMsg };
     const updatedHistory = [...chatHistory, newUserMessage];
     setChatHistory(updatedHistory);
 
     try {
-      const result = await researchCompany({
-        user_message: currentMsg,
-        company_name: companyName,
-        session_id: sessionId,
-        chat_history: chatHistory,
-        current_plan: plan,
-      });
-
-      setChatHistory(result.chat_history);
-      setPlan(result.plan);
-      setDiffResult(result.diff_result);
-      setCompanyName(result.company_name);
+      await researchCompanyStream(
+        {
+          user_message: currentMsg,
+          company_name: companyName,
+          session_id: sessionId,
+          chat_history: updatedHistory,
+          current_plan: plan,
+        },
+        (token) => {
+          setStreamingReply((prev) => prev + token);
+        },
+        (result) => {
+          // Finished streaming
+          setChatHistory(result.chat_history);
+          setPlan(result.plan);
+          setDiffResult(result.diff_result);
+          
+          if (!companyName && result.company_name) {
+             addToast({ type: "success", message: `Intel gathered on ${result.company_name}` });
+          }
+          setCompanyName(result.company_name);
+          setStreamingReply("");
+        },
+        (errMsg) => {
+          if (errMsg.includes("Invalid input detected")) {
+             addToast({ type: "info", message: "Invalid input detected." });
+          } else {
+             addToast({ type: "error", message: errMsg });
+          }
+        }
+      );
     } catch (err: any) {
-      setError(err.message || "An unexpected error occurred");
+      addToast({ type: "error", message: err.message || "An unexpected error occurred" });
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +105,7 @@ function App() {
     setDiffResult({});
     setCompanyName("");
     setUserMessage("");
-    setError(null);
+    setStreamingReply("");
   };
 
   const getSectionIcon = (key: string) => {
@@ -170,7 +204,7 @@ function App() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <Badge className="ml-4 px-4 py-1.5 rounded-full bg-primary/10 text-primary border-primary/20 font-bold hover:bg-primary/20 transition-all cursor-default">
+                <Badge className="ml-4 px-4 py-1.5 rounded-full bg-primary/10 text-primary border-primary/20 font-bold hover:bg-primary/20 transition-all cursor-default hidden md:inline-flex">
                   <Globe className="w-3 h-3 mr-2" />
                   {companyName}
                 </Badge>
@@ -179,17 +213,55 @@ function App() {
           </AnimatePresence>
         </div>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={resetState} className="rounded-full px-6 text-white/40 hover:text-white hover:bg-white/5 transition-all font-bold tracking-widest text-[10px] uppercase">
+          <Button variant="ghost" size="sm" onClick={resetState} className="rounded-full px-6 text-white/40 hover:text-white hover:bg-white/5 transition-all font-bold tracking-widest text-[10px] uppercase hidden sm:flex">
             <RotateCcw className="w-3.5 h-3.5 mr-2" />
             Wipe System
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setIsHistoryOpen(true)} className="rounded-full px-6 text-white/40 hover:text-white hover:bg-white/5 transition-all font-bold tracking-widest text-[10px] uppercase">
+            <History className="w-3.5 h-3.5 mr-2" />
+            Timeline
           </Button>
         </div>
       </header>
 
-      <main className="flex flex-1 overflow-hidden">
+      {/* Mobile Tab Bar */}
+      <div className="lg:hidden flex border-b border-white/5 bg-black/40">
+        <button 
+          onClick={() => setActiveMobileTab("chat")}
+          className={cn(
+            "flex-1 py-4 text-xs font-black uppercase tracking-widest transition-colors",
+            activeMobileTab === "chat" 
+              ? "text-primary border-b-2 border-primary bg-primary/5" 
+              : "text-white/30 hover:text-white/50"
+          )}
+        >
+          <MessageSquare className="w-4 h-4 mx-auto mb-1" />
+          Intel Hub
+        </button>
+        <button 
+          onClick={() => setActiveMobileTab("plan")}
+          className={cn(
+            "flex-1 py-4 text-xs font-black uppercase tracking-widest transition-colors",
+            activeMobileTab === "plan" 
+              ? "text-primary border-b-2 border-primary bg-primary/5" 
+              : "text-white/30 hover:text-white/50"
+          )}
+        >
+          <LayoutGrid className="w-4 h-4 mx-auto mb-1" />
+          Canvas
+          {plan && activeMobileTab !== "plan" && (
+            <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse relative -top-1" />
+          )}
+        </button>
+      </div>
+
+      <main className="flex flex-1 overflow-hidden relative">
         {/* Left Column: Intelligence Hub (Chat) */}
-        <section className="w-full lg:w-[40%] flex flex-col border-r border-white/5 bg-white/[0.01]">
-          <ScrollArea className="flex-1 p-10" ref={scrollRef}>
+        <section className={cn(
+          "w-full lg:w-[40%] flex-col border-r border-white/5 bg-white/[0.01]",
+          activeMobileTab === "chat" ? "flex" : "hidden lg:flex"
+        )}>
+          <ScrollArea className="flex-1 p-4 lg:p-10" ref={scrollRef}>
             <div className="max-w-xl mx-auto space-y-10 pb-4">
               <AnimatePresence mode="popLayout">
                 {chatHistory.length === 0 && (
@@ -220,7 +292,7 @@ function App() {
                     className={cn("flex items-start gap-4", msg.role === "user" ? "flex-row-reverse" : "flex-row")}
                   >
                     <div className={cn(
-                      "p-3 rounded-2xl shadow-xl border transition-all", 
+                      "p-3 rounded-2xl shadow-xl border transition-all shrink-0", 
                       msg.role === "user" 
                         ? "bg-primary border-white/20 text-white" 
                         : "bg-black/40 border-white/10 text-primary"
@@ -237,28 +309,48 @@ function App() {
                     </div>
                   </motion.div>
                 ))}
+                
+                {/* Streaming Reply Bubble */}
+                {isLoading && streamingReply && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    className="flex items-start gap-4 flex-row"
+                  >
+                    <div className="p-3 rounded-2xl shadow-xl border transition-all shrink-0 bg-black/40 border-white/10 text-primary">
+                      <Bot className="w-4 h-4 animate-pulse" />
+                    </div>
+                    <div className="max-w-[85%] rounded-[2rem] px-6 py-5 text-sm leading-relaxed shadow-2xl border backdrop-blur-sm bg-white/[0.03] border-white/5 rounded-tl-none text-white/80">
+                      <p className="whitespace-pre-wrap">
+                        {streamingReply}
+                        <span className="animate-pulse font-bold text-primary ml-1">▋</span>
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+                
+                {/* Initial Loading Spinner (before streaming starts) */}
+                {isLoading && !streamingReply && (
+                  <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }}
+                    className="flex items-start gap-4"
+                  >
+                    <div className="p-3 rounded-2xl bg-black/40 border border-white/10 text-primary shrink-0">
+                      <Bot className="w-4 h-4 animate-pulse" />
+                    </div>
+                    <div className="bg-white/[0.03] border border-white/5 rounded-[2rem] rounded-tl-none px-6 py-5 flex gap-2 items-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
+                    </div>
+                  </motion.div>
+                )}
               </AnimatePresence>
-              
-              {isLoading && (
-                <motion.div 
-                  initial={{ opacity: 0 }} 
-                  animate={{ opacity: 1 }}
-                  className="flex items-start gap-4"
-                >
-                  <div className="p-3 rounded-2xl bg-black/40 border border-white/10 text-primary">
-                    <Bot className="w-4 h-4 animate-pulse" />
-                  </div>
-                  <div className="bg-white/[0.03] border border-white/5 rounded-[2rem] rounded-tl-none px-6 py-5 flex gap-2 items-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
-                  </div>
-                </motion.div>
-              )}
             </div>
           </ScrollArea>
 
-          <div className="p-10 bg-black/60 backdrop-blur-3xl border-t border-white/5">
+          <div className="p-4 lg:p-10 bg-black/60 backdrop-blur-3xl border-t border-white/5">
             <div className="max-w-xl mx-auto relative group">
               <div className="absolute -inset-1 bg-gradient-to-r from-primary/50 to-purple-600/50 rounded-[1.5rem] blur opacity-0 group-focus-within:opacity-30 transition duration-500"></div>
               <Input
@@ -282,14 +374,19 @@ function App() {
         </section>
 
         {/* Right Column: Strategic Canvas */}
-        <section className="hidden lg:flex flex-1 flex-col bg-black/20">
-          <ScrollArea className="flex-1 px-14 py-12">
+        <section className={cn(
+          "flex-1 flex-col bg-black/20",
+          activeMobileTab === "plan" ? "flex" : "hidden lg:flex"
+        )}>
+          <ScrollArea className="flex-1 px-4 py-8 lg:px-14 lg:py-12">
             <div className="max-w-6xl mx-auto space-y-12">
-              {!plan ? (
+              {isLoading && !plan ? (
+                <PlanSkeleton />
+              ) : !plan ? (
                 <motion.div 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="flex flex-col items-center justify-center min-h-[75vh] text-center border-2 border-dashed border-white/5 rounded-[3rem] bg-white/[0.01] p-16 space-y-8"
+                  className="flex flex-col items-center justify-center min-h-[75vh] text-center border-2 border-dashed border-white/5 rounded-[3rem] bg-white/[0.01] p-8 lg:p-16 space-y-8"
                 >
                   <div className="relative group">
                     <div className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full group-hover:bg-primary/40 transition-all duration-1000" />
@@ -311,7 +408,7 @@ function App() {
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="bg-primary/5 border border-primary/20 rounded-[2.5rem] p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden"
+                      className="bg-primary/5 border border-primary/20 rounded-[2.5rem] p-6 lg:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden"
                     >
                       <div className="absolute top-0 right-0 p-3 px-6 bg-primary/20 text-primary font-black text-[10px] uppercase tracking-widest rounded-bl-3xl">Delta Stream Active</div>
                       <div className="flex items-center gap-3 mb-8">
@@ -344,17 +441,20 @@ function App() {
                   )}
 
                   {/* Plan Header */}
-                  <div className="flex items-end justify-between gap-8 border-b border-white/5 pb-10">
+                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-10">
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
                         <Badge className="bg-primary/10 text-primary border-primary/20 font-black text-[10px] tracking-widest uppercase py-1 px-3">Live Feed</Badge>
                         <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">Strategic Assessment</span>
                       </div>
-                      <h2 className="text-6xl font-black tracking-tighter text-white">
-                        {companyName}
-                      </h2>
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <h2 className="text-4xl lg:text-6xl font-black tracking-tighter text-white">
+                          {companyName}
+                        </h2>
+                        <ExportButton plan={plan} companyName={companyName} />
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 text-right">
+                    <div className="flex flex-row md:flex-col items-center md:items-end gap-4 md:gap-2 text-right">
                        <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">Verification ID</p>
                        <p className="text-xs font-mono text-white/40">{sessionId.split('-')[0]}</p>
                     </div>
@@ -373,10 +473,21 @@ function App() {
             </div>
           </ScrollArea>
         </section>
+
+        <AnimatePresence>
+          {isHistoryOpen && (
+            <HistoryPanel 
+              companyName={companyName} 
+              sessionId={sessionId} 
+              onClose={() => setIsHistoryOpen(false)} 
+            />
+          )}
+        </AnimatePresence>
       </main>
+
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }
 
 export default App;
-
