@@ -9,8 +9,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import research
 from database.db import init_db
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Company Research Agent API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database on startup."""
+    init_db()
+    yield
+
+app = FastAPI(title="Company Research Agent API", lifespan=lifespan)
 
 # Enable CORS for localhost:5173 (Vite default)
 app.add_middleware(
@@ -20,11 +27,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-def on_startup():
-    """Initialize database on startup."""
-    init_db()
 
 @app.get("/health")
 def health_check():

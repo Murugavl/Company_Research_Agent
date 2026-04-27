@@ -1,9 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from typing import List, Dict, Optional, Any
+import json
 from pydantic import BaseModel, Field
 
 # Updated imports for consolidated backend structure
-from agent.agent_core import generate_agent_reply
+from agent.agent_core import generate_agent_reply, generate_agent_reply_stream
 from database.db import get_research_history
 from models import AccountPlanModel
 from dependencies import validate_session_id
@@ -70,6 +72,42 @@ async def perform_research(request: ResearchRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/research/stream")
+async def perform_research_stream(request: ResearchRequest):
+    # Validation against injection patterns
+    msg_lower = request.user_message.lower()
+    if any(pattern in msg_lower for pattern in INJECTION_PATTERNS):
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid input detected. Please ask about a real company."
+        )
+
+    # Validate session_id
+    validate_session_id(request.session_id)
+
+    # Reconstruct AccountPlanModel if provided
+    current_plan_model = None
+    if request.current_plan:
+        try:
+            current_plan_model = AccountPlanModel(**request.current_plan)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid plan structure: {str(e)}")
+
+    async def event_generator():
+        try:
+            async for event in generate_agent_reply_stream(
+                user_message=request.user_message,
+                company_name=request.company_name,
+                current_plan=current_plan_model,
+                chat_history=request.chat_history,
+                session_id=request.session_id
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @router.get("/history/{company}/{session_id}")
 async def get_history(company: str, session_id: str):
