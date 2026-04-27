@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Card, CardContent, CardHeader, CardTitle, 
   Badge, Button, ScrollArea, Input, 
@@ -7,7 +8,8 @@ import {
 import { 
   Send, RotateCcw, Building2, User, 
   Bot, AlertCircle, TrendingUp, Users, 
-  ShieldAlert, Lightbulb, Target, Briefcase 
+  ShieldAlert, Lightbulb, Target, Briefcase,
+  Sparkles, ChevronRight, Activity, Globe
 } from "lucide-react";
 import { researchCompany, generateSessionId } from "@/lib/api";
 import type { ChatMessage, AccountPlan, DiffResult } from "@/lib/types";
@@ -74,15 +76,24 @@ function App() {
 
   const getSectionIcon = (key: string) => {
     switch (key) {
-      case "overview": return <Building2 className="w-5 h-5 text-primary" />;
-      case "products_services": return <Briefcase className="w-5 h-5 text-primary" />;
-      case "market_position": return <TrendingUp className="w-5 h-5 text-primary" />;
-      case "competitors": return <Users className="w-5 h-5 text-primary" />;
-      case "key_contacts": return <Users className="w-5 h-5 text-primary" />;
-      case "opportunities": return <Lightbulb className="w-5 h-5 text-primary" />;
-      case "risks": return <ShieldAlert className="w-5 h-5 text-primary" />;
-      case "recommended_actions": return <Target className="w-5 h-5 text-primary" />;
-      default: return <Building2 className="w-5 h-5 text-primary" />;
+      case "overview": return <Building2 className="w-5 h-5" />;
+      case "products_services": return <Briefcase className="w-5 h-5" />;
+      case "market_position": return <TrendingUp className="w-5 h-5" />;
+      case "competitors": return <Users className="w-5 h-5" />;
+      case "key_contacts": return <Users className="w-5 h-5" />;
+      case "opportunities": return <Lightbulb className="w-5 h-5" />;
+      case "risks": return <ShieldAlert className="w-5 h-5" />;
+      case "recommended_actions": return <Target className="w-5 h-5" />;
+      default: return <Building2 className="w-5 h-5" />;
+    }
+  };
+
+  const getSectionColor = (key: string) => {
+    switch (key) {
+      case "opportunities": return "text-emerald-400 bg-emerald-400/10 border-emerald-400/20";
+      case "risks": return "text-rose-400 bg-rose-400/10 border-rose-400/20";
+      case "recommended_actions": return "text-amber-400 bg-amber-400/10 border-amber-400/20";
+      default: return "text-primary bg-primary/10 border-primary/20";
     }
   };
 
@@ -95,117 +106,164 @@ function App() {
       "products_services"
     ].includes(sectionKey);
 
+    const colors = getSectionColor(sectionKey);
+
     return (
-      <Card key={sectionKey} className="h-full border-primary/10 bg-card/50 backdrop-blur-sm transition-all hover:border-primary/30">
-        <CardHeader className="pb-3 flex flex-row items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        key={sectionKey}
+        className={cn(
+          "group h-full rounded-3xl border border-white/5 bg-white/[0.03] backdrop-blur-md p-6 transition-all hover:bg-white/[0.05] hover:border-white/10",
+          sectionKey === "overview" ? "md:col-span-2" : ""
+        )}
+      >
+        <div className="flex items-center gap-4 mb-6">
+          <div className={cn("p-3 rounded-2xl", colors)}>
             {getSectionIcon(sectionKey)}
           </div>
-          <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground pt-1">
+          <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-white/50 group-hover:text-white/80 transition-colors">
             {title.replace(/_/g, " ")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </h3>
+        </div>
+        <div className="space-y-4">
           {isList ? (
-            <ul className="list-disc pl-5 space-y-2 text-sm leading-relaxed text-foreground/80">
+            <ul className="space-y-3">
               {content.split("\n").filter(line => line.trim()).map((line, i) => (
-                <li key={i}>{line.replace(/^[•\-\*]\s*/, "")}</li>
+                <li key={i} className="flex items-start gap-3 text-sm leading-relaxed text-white/70">
+                  <div className={cn("mt-1.5 w-1.5 h-1.5 rounded-full shrink-0", colors.split(" ")[0])} />
+                  <span>{line.replace(/^[•\-\*]\s*/, "")}</span>
+                </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap">{content}</p>
+            <p className="text-sm leading-relaxed text-white/70 whitespace-pre-wrap">{content}</p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </motion.div>
     );
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background selection:bg-primary/20 dark">
+    <div className="flex flex-col h-screen bg-[#0A0A0B] text-white selection:bg-primary/30 overflow-hidden font-outfit">
       {/* Header */}
-      <header className="flex items-center justify-between px-8 py-5 border-b border-border/50 bg-card/30 backdrop-blur-xl sticky top-0 z-10 text-foreground">
-        <div className="flex items-center gap-4">
-          <div className="p-2.5 bg-primary/20 rounded-xl shadow-inner">
-            <TrendingUp className="w-6 h-6 text-primary" />
+      <header className="flex items-center justify-between px-10 py-6 border-b border-white/5 bg-black/40 backdrop-blur-2xl sticky top-0 z-50">
+        <div className="flex items-center gap-6">
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-primary to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+            <div className="relative p-3 bg-black rounded-2xl leading-none flex items-center border border-white/10">
+              <Sparkles className="w-6 h-6 text-primary" />
+            </div>
           </div>
-          <h1 className="text-xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/60">
-            Company Intelligence Agent
-          </h1>
-          {companyName && (
-            <Badge className="ml-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary border-primary/20 font-bold transition-all">
-              {companyName}
-            </Badge>
-          )}
+          <div className="flex flex-col">
+            <h1 className="text-xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/50">
+              STRATOS <span className="text-primary/80">AI</span>
+            </h1>
+            <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-white/30">Strategic Intelligence System</p>
+          </div>
+          <AnimatePresence>
+            {companyName && (
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <Badge className="ml-4 px-4 py-1.5 rounded-full bg-primary/10 text-primary border-primary/20 font-bold hover:bg-primary/20 transition-all cursor-default">
+                  <Globe className="w-3 h-3 mr-2" />
+                  {companyName}
+                </Badge>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-        <Button variant="outline" size="sm" onClick={resetState} className="rounded-full px-5 py-2 border-border/50 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-all font-semibold">
-          <RotateCcw className="w-4 h-4 mr-2" />
-          Reset Workspace
-        </Button>
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={resetState} className="rounded-full px-6 text-white/40 hover:text-white hover:bg-white/5 transition-all font-bold tracking-widest text-[10px] uppercase">
+            <RotateCcw className="w-3.5 h-3.5 mr-2" />
+            Wipe System
+          </Button>
+        </div>
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        {/* Left Column: Chat */}
-        <section className="w-full lg:w-[42%] flex flex-col border-r border-border/50 bg-muted/20">
-          <ScrollArea className="flex-1 p-8" ref={scrollRef}>
-            <div className="max-w-2xl mx-auto space-y-8 pb-4">
-              {chatHistory.length === 0 && (
-                <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
-                    <div className="relative p-6 bg-card border border-primary/10 rounded-2xl shadow-xl">
-                      <Bot className="w-16 h-16 text-primary opacity-40" />
+        {/* Left Column: Intelligence Hub (Chat) */}
+        <section className="w-full lg:w-[40%] flex flex-col border-r border-white/5 bg-white/[0.01]">
+          <ScrollArea className="flex-1 p-10" ref={scrollRef}>
+            <div className="max-w-xl mx-auto space-y-10 pb-4">
+              <AnimatePresence mode="popLayout">
+                {chatHistory.length === 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8"
+                  >
+                    <div className="relative animate-float">
+                      <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
+                      <div className="relative p-8 bg-black/40 border border-white/10 rounded-[2.5rem] shadow-2xl backdrop-blur-xl">
+                        <Activity className="w-12 h-12 text-primary" />
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-2xl font-bold">Awaiting Strategy</p>
-                    <p className="text-muted-foreground max-w-sm px-4 text-foreground/60">
-                      Enter a company name below to begin deep-dive research into products, financials, and competitors.
-                    </p>
-                  </div>
-                </div>
-              )}
-              {chatHistory.map((msg, i) => (
-                <div key={i} className={cn("flex items-start gap-5", msg.role === "user" ? "flex-row-reverse" : "flex-row")}>
-                  <div className={cn("p-2.5 rounded-xl shrink-0 shadow-lg", msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border border-border/50")}>
-                    {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4 text-primary" />}
-                  </div>
-                  <div className={cn(
-                    "max-w-[85%] rounded-3xl px-5 py-4 text-sm leading-relaxed shadow-sm transition-all",
-                    msg.role === "user" ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-card border border-border/50 rounded-tl-none text-foreground/90"
-                  )}>
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
-                  </div>
-                </div>
-              ))}
+                    <div className="space-y-3">
+                      <h2 className="text-3xl font-black tracking-tighter">System Ready</h2>
+                      <p className="text-white/40 max-w-xs mx-auto text-sm leading-relaxed font-medium italic">
+                        "Initiate a strategic scan by entering a corporate entity below."
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+                {chatHistory.map((msg, i) => (
+                  <motion.div 
+                    key={i}
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    className={cn("flex items-start gap-4", msg.role === "user" ? "flex-row-reverse" : "flex-row")}
+                  >
+                    <div className={cn(
+                      "p-3 rounded-2xl shadow-xl border transition-all", 
+                      msg.role === "user" 
+                        ? "bg-primary border-white/20 text-white" 
+                        : "bg-black/40 border-white/10 text-primary"
+                    )}>
+                      {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                    </div>
+                    <div className={cn(
+                      "max-w-[85%] rounded-[2rem] px-6 py-5 text-sm leading-relaxed shadow-2xl border backdrop-blur-sm",
+                      msg.role === "user" 
+                        ? "bg-primary/20 border-primary/30 rounded-tr-none text-white font-medium" 
+                        : "bg-white/[0.03] border-white/5 rounded-tl-none text-white/80"
+                    )}>
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              
               {isLoading && (
-                <div className="flex items-start gap-4">
-                  <div className="p-2.5 rounded-xl bg-card border border-border/40">
-                    <Bot className="w-4 h-4 text-primary/40 animate-pulse" />
+                <motion.div 
+                  initial={{ opacity: 0 }} 
+                  animate={{ opacity: 1 }}
+                  className="flex items-start gap-4"
+                >
+                  <div className="p-3 rounded-2xl bg-black/40 border border-white/10 text-primary">
+                    <Bot className="w-4 h-4 animate-pulse" />
                   </div>
-                  <div className="bg-card/50 border border-border/40 rounded-3xl rounded-tl-none px-5 py-4">
-                    <div className="flex gap-2">
-                      <div className="w-2 h-2 rounded-full bg-primary/30 animate-bounce" />
-                      <div className="w-2 h-2 rounded-full bg-primary/30 animate-bounce [animation-delay:0.2s]" />
-                      <div className="w-2 h-2 rounded-full bg-primary/30 animate-bounce [animation-delay:0.4s]" />
-                    </div>
+                  <div className="bg-white/[0.03] border border-white/5 rounded-[2rem] rounded-tl-none px-6 py-5 flex gap-2 items-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
                   </div>
-                </div>
-              )}
-              {error && (
-                <Alert variant="destructive" className="border-destructive/20 bg-destructive/5 text-destructive rounded-2xl">
-                  <AlertCircle className="w-4 h-4" />
-                  <AlertTitle className="font-bold">System Alert</AlertTitle>
-                  <AlertDescription className="text-sm opacity-90">{error}</AlertDescription>
-                </Alert>
+                </motion.div>
               )}
             </div>
           </ScrollArea>
 
-          <div className="p-8 bg-card/60 backdrop-blur-xl border-t border-border/50">
-            <div className="max-w-2xl mx-auto relative group">
+          <div className="p-10 bg-black/60 backdrop-blur-3xl border-t border-white/5">
+            <div className="max-w-xl mx-auto relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-primary/50 to-purple-600/50 rounded-[1.5rem] blur opacity-0 group-focus-within:opacity-30 transition duration-500"></div>
               <Input
-                placeholder="Ask about a company (e.g. 'Generate a brief for Groq')..."
-                className="pr-14 py-8 rounded-2xl border-border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all font-medium text-lg placeholder:text-muted-foreground/60 shadow-lg group-hover:border-primary/30 text-foreground"
+                placeholder="Target corporation or strategic query..."
+                className="relative pr-16 py-8 rounded-[1.5rem] border-white/10 bg-white/[0.03] focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-semibold text-base placeholder:text-white/20 text-white shadow-2xl"
                 value={userMessage}
                 onChange={(e) => setUserMessage(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
@@ -215,7 +273,7 @@ function App() {
                 size="icon" 
                 onClick={handleSend} 
                 disabled={!userMessage.trim() || isLoading}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl h-12 w-12 bg-primary hover:bg-primary/90 transition-all shadow-xl active:scale-90"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-2xl h-12 w-12 bg-primary hover:bg-primary/90 transition-all shadow-xl active:scale-95 glow-primary"
               >
                 <Send className="w-5 h-5 text-white" />
               </Button>
@@ -223,67 +281,88 @@ function App() {
           </div>
         </section>
 
-        {/* Right Column: Structured Plan */}
-        <section className="hidden lg:flex flex-1 flex-col bg-background/50">
-          <ScrollArea className="flex-1 px-12 py-10">
-            <div className="max-w-5xl mx-auto space-y-10">
+        {/* Right Column: Strategic Canvas */}
+        <section className="hidden lg:flex flex-1 flex-col bg-black/20">
+          <ScrollArea className="flex-1 px-14 py-12">
+            <div className="max-w-6xl mx-auto space-y-12">
               {!plan ? (
-                <div className="flex flex-col items-center justify-center min-h-[70vh] text-center border-2 border-dashed border-border/50 rounded-[2.5rem] bg-muted/5 p-12 space-y-6">
-                  <div className="p-8 bg-primary/5 rounded-full ring-1 ring-primary/10">
-                    <Building2 className="w-20 h-20 text-primary/20" />
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex flex-col items-center justify-center min-h-[75vh] text-center border-2 border-dashed border-white/5 rounded-[3rem] bg-white/[0.01] p-16 space-y-8"
+                >
+                  <div className="relative group">
+                    <div className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full group-hover:bg-primary/40 transition-all duration-1000" />
+                    <div className="relative p-12 bg-black border border-white/5 rounded-[3rem] shadow-2xl">
+                      <Target className="w-24 h-24 text-white/10 group-hover:text-primary/30 transition-all duration-500" />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <h3 className="text-2xl font-bold text-foreground">Research Portal</h3>
-                    <p className="text-muted-foreground max-w-md mx-auto leading-relaxed">
-                      Structured intelligence reports including market analysis, competitor landscapes, and strategic recommendations will populate here.
+                  <div className="space-y-3">
+                    <h3 className="text-2xl font-black tracking-tight text-white/40">Canvas Locked</h3>
+                    <p className="text-white/20 max-w-sm mx-auto leading-relaxed text-sm font-medium">
+                      Establish a target entity to unlock deep-dive market intelligence and strategic forecasts.
                     </p>
                   </div>
-                </div>
+                </motion.div>
               ) : (
-                <div className="space-y-10 pb-16 text-foreground">
+                <div className="space-y-12 pb-24">
+                  {/* Delta Alert */}
                   {Object.keys(diffResult).length > 0 && (
-                    <Alert className="bg-primary/5 border-primary/20 rounded-2xl px-6 py-5 shadow-sm">
-                      <AlertCircle className="w-5 h-5 text-primary" />
-                      <AlertTitle className="text-primary font-black uppercase text-xs tracking-widest pl-2 mb-4">
-                        Delta Report: Incremental Updates Detected
-                      </AlertTitle>
-                      <AlertDescription>
-                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                          {Object.entries(diffResult).map(([section, diff]) => (
-                            <li key={section} className="text-xs p-4 bg-card rounded-xl border border-primary/10 shadow-sm relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 p-1 px-2 bg-primary/5 text-primary/40 font-black text-[10px]">CHANGED</div>
-                              <div className="font-extrabold text-foreground mb-3 uppercase tracking-tighter">
-                                {section.replace(/_/g, " ")}
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-primary/5 border border-primary/20 rounded-[2.5rem] p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden"
+                    >
+                      <div className="absolute top-0 right-0 p-3 px-6 bg-primary/20 text-primary font-black text-[10px] uppercase tracking-widest rounded-bl-3xl">Delta Stream Active</div>
+                      <div className="flex items-center gap-3 mb-8">
+                        <Activity className="w-5 h-5 text-primary" />
+                        <h4 className="text-primary font-black uppercase text-xs tracking-[0.3em]">Incremental Intelligence Update</h4>
+                      </div>
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        {Object.entries(diffResult).map(([section, diff]) => (
+                          <motion.div 
+                            layout
+                            key={section} 
+                            className="bg-black/40 rounded-2xl border border-white/5 p-5 relative group overflow-hidden"
+                          >
+                            <div className="font-black text-white/30 mb-4 uppercase tracking-tighter text-[10px] flex items-center justify-between">
+                              {section.replace(/_/g, " ")}
+                              <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                            </div>
+                            <div className="space-y-2">
+                              <div className="p-4 text-white/30 bg-white/[0.02] rounded-xl border border-white/5 text-xs line-through italic">
+                                {diff.old || "Empty State"}
                               </div>
-                              <div className="space-y-2">
-                                <div className="p-3 line-through text-destructive/50 bg-destructive/5 rounded-lg border border-destructive/10">
-                                  {diff.old || "Empty State"}
-                                </div>
-                                <div className="p-3 text-primary bg-primary/5 rounded-lg border border-primary/20 font-bold">
-                                  {diff.new}
-                                </div>
+                              <div className="p-4 text-primary bg-primary/10 rounded-xl border border-primary/20 text-sm font-bold shadow-inner">
+                                {diff.new}
                               </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </AlertDescription>
-                    </Alert>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </motion.div>
                   )}
 
-                  <div className="flex items-center gap-6">
-                    <div className="space-y-1">
-                      <h2 className="text-4xl font-black tracking-tighter text-foreground">
+                  {/* Plan Header */}
+                  <div className="flex items-end justify-between gap-8 border-b border-white/5 pb-10">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <Badge className="bg-primary/10 text-primary border-primary/20 font-black text-[10px] tracking-widest uppercase py-1 px-3">Live Feed</Badge>
+                        <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">Strategic Assessment</span>
+                      </div>
+                      <h2 className="text-6xl font-black tracking-tighter text-white">
                         {companyName}
                       </h2>
-                      <p className="text-sm font-medium text-muted-foreground uppercase tracking-[0.2em]">Strategy Intelligence Report</p>
                     </div>
-                    <Separator className="flex-1 opacity-20" />
+                    <div className="flex flex-col items-end gap-2 text-right">
+                       <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">Verification ID</p>
+                       <p className="text-xs font-mono text-white/40">{sessionId.split('-')[0]}</p>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
-                    <div className="md:col-span-2">
-                      {renderSection("Executive Overview", plan.overview, "overview")}
-                    </div>
+                  {/* Bento Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {renderSection("Executive Overview", plan.overview, "overview")}
                     {Object.entries(plan)
                       .filter(([key]) => key !== "overview" && key !== "company_name")
                       .map(([key, value]) => renderSection(key, value, key))
@@ -300,3 +379,4 @@ function App() {
 }
 
 export default App;
+
