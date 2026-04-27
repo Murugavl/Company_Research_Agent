@@ -37,7 +37,8 @@ env/
 
 # Project Specific
 backend/.env
-backend/*.db
+*.db
+*.bak
 logs/
 .pytest_cache/
 .coverage
