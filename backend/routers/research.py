@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 
 # Updated imports for consolidated backend structure
 from agent.agent_core import generate_agent_reply, generate_agent_reply_stream
-from database.db import get_research_history
 from models import AccountPlanModel
 from dependencies import validate_session_id
 
@@ -109,13 +108,4 @@ async def perform_research_stream(request: ResearchRequest):
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
-@router.get("/history/{company}/{session_id}")
-async def get_history(company: str, session_id: str):
-    # Validate session_id
-    validate_session_id(session_id)
-    
-    try:
-        history = get_research_history(company, session_id)
-        return history
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+

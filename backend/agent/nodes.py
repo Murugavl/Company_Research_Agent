@@ -2,9 +2,17 @@ import asyncio
 from typing import Dict, Any, List, Optional
 from .state import AgentState
 from .tools import research_company, split_into_sections, complete_missing_sections
-from database.db import get_last_research, save_research
-from database.differ import diff_plans
 from config import settings
+
+def diff_plans(old_plan, new_plan):
+    diff = {}
+    for key, new_val in new_plan.items():
+        if key in ["company_name", "session_id", "researched_at", "id"]:
+            continue
+        old_val = old_plan.get(key, "")
+        if str(old_val).strip() != str(new_val).strip():
+            diff[key] = {"old": str(old_val).strip(), "new": str(new_val).strip()}
+    return diff
 
 async def node_normalize(state: AgentState) -> Dict:
     """Normalize the company name to its official version."""
@@ -66,15 +74,12 @@ Answer naturally and professionally based on the research.
     return {"reply": reply_text}
 
 async def node_save(state: AgentState) -> Dict:
-    """Save the research result to the database and calculate diff from previous version."""
+    """Calculate diff from previous version."""
     company_name = state["company_name"]
-    session_id = state["session_id"]
     current_data = state["final_sections"].copy()
     current_data["company_name"] = company_name
     
-    # Calls get_last_research before saving to compare
-    last_research = get_last_research(company_name, session_id)
-    save_research(company_name, current_data, session_id)
+    last_research = state.get("current_plan")
     
     diff = {}
     if last_research:

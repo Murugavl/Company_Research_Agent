@@ -8,13 +8,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import research
-from database.db import init_db
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database on startup."""
-    init_db()
     yield
 
 app = FastAPI(title="Company Research Agent API", lifespan=lifespan)
