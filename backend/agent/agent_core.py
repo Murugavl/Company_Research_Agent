@@ -305,7 +305,8 @@ Return ONLY the updated text.
         "reply": "",
         "diff_result": {},
         "conflicts": [],
-        "error": None
+        "error": None,
+        "sources": []
     }
 
     try:
@@ -366,7 +367,8 @@ Answer naturally and professionally based on the research.
             risks=str(final_sections.get("risks", "")),
             recommended_actions=str(final_sections.get("recommended_actions", "")),
             locations=str(final_sections.get("locations", "")),
-            company_images=final_sections.get("company_images", [])
+            company_images=final_sections.get("company_images", []),
+            sources=final_sections.get("sources", [])
         )
         
         new_history = chat_history + [
@@ -384,5 +386,9 @@ Answer naturally and professionally based on the research.
 
     except Exception as e:
         logger.error(f"Streaming research failed: {e}", exc_info=True)
-        yield {"type": "token", "content": f"I encountered an error while researching. Please try again. Error: {str(e)}"}
+        error_msg = str(e)
+        friendly_error = "The strategic engine is currently experiencing high volume. Please wait a moment and try again."
+        if "429" in error_msg:
+            friendly_error = "Intelligence rate limit reached. Please pause for 60 seconds before initiating a new scan."
+        yield {"type": "token", "content": friendly_error}
 

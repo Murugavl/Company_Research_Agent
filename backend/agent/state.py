@@ -18,3 +18,4 @@ class AgentState(TypedDict):
     diff_result: Dict[str, Any]
     conflicts: List[str]
     error: Optional[str]
+    sources: List[Dict[str, Any]]

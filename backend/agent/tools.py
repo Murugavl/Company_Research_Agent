@@ -134,9 +134,7 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
     Break the following research text into structured sections for {company_name}.
     Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
     For locations, include details about the main branch and any sub-branches or global presence.
-    CRITICAL: Every value in the JSON MUST be a string (use text or markdown bullet points). Do NOT return nested objects or dictionaries.
-    
-    Focus on structuring existing information.
+    CRITICAL: Every value in the JSON MUST be a comprehensive, detailed string (at least 3-5 bullet points or 2 detailed paragraphs per section). Use markdown bullet points for lists. Do NOT return nested objects or dictionaries.
     
     Raw text:
     {raw_text}
@@ -146,7 +144,8 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
         response = groq_client.chat.completions.create(
             model=settings.GROQ_MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
+            temperature=0.3,
+            max_tokens=2500
         )
         text = response.choices[0].message.content
         parsed = await safe_json_parser(text, PartialPlan)
@@ -158,12 +157,12 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
 async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
     """Independently extract and enrich sections to be run concurrently with split."""
     prompt = f"""
-    Based on the research for {company_name}, fill in any strategic gaps.
+    Based on the research for {company_name}, perform a deep strategic analysis to fill in any gaps.
     Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
     For locations, include details about the main branch and any sub-branches or global presence.
-    CRITICAL: Every value in the JSON MUST be a string (use text or markdown bullet points). Do NOT return nested objects or dictionaries.
+    CRITICAL: Every value in the JSON MUST be a comprehensive, detailed string (at least 3-5 bullet points or 2 detailed paragraphs per section). Provide specific names, data points, and strategic insights where possible. Do NOT return nested objects or dictionaries.
     
-    Focus on strategic inference and missing context.
+    Focus on strategic inference, market trends, and missing context.
     
     Raw text:
     {raw_text}
@@ -173,7 +172,8 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
         response = groq_client.chat.completions.create(
             model=settings.GROQ_MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.5
+            temperature=0.6,
+            max_tokens=2500
         )
         text = response.choices[0].message.content
         parsed = await safe_json_parser(text, PartialPlan)

@@ -39,12 +39,20 @@ async def node_research(state: AgentState) -> Dict:
     # Combine images from both searches
     images = res.get("images", [])
     if img_data and img_data.get("images"):
+        all_images = images + img_data.get("images", [])
+        # Filter out problematic domains (facebook lookaside, etc.)
+        filtered = [
+            img for img in all_images 
+            if "lookaside.fbsbx.com" not in img 
+            and "fbcdn.net" not in img
+            and "giphy.com" not in img
+        ]
         # Use a dict to avoid duplicates and limit to 10 images
-        unique_images = list(dict.fromkeys(images + img_data.get("images", [])))
+        unique_images = list(dict.fromkeys(filtered))
         images = unique_images[:10]
     
     combined = f"{answer}\n\nRELEVANT SNIPPETS:\n{snippets}"
-    return {"raw_research": combined.strip(), "images": images}
+    return {"raw_research": combined.strip(), "images": images, "sources": res.get("sources", [])}
 
 async def node_split(state: AgentState) -> Dict:
     """Analyze raw research and split into structured sections."""
@@ -67,8 +75,9 @@ async def node_merge(state: AgentState) -> Dict:
         if not merged.get(k) or len(str(merged.get(k))) < 20:
             merged[k] = v
             
-    # Include images from state if present
+    # Include images and sources from state if present
     merged["company_images"] = state.get("images", [])
+    merged["sources"] = state.get("sources", [])
             
     return {"final_sections": merged}
 
