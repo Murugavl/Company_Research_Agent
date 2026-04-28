@@ -12,6 +12,8 @@ class AccountPlanModel(BaseModel):
     opportunities: str = Field(default="", description="Bullet list of strategic opportunities")
     risks: str = Field(default="", description="Bullet list of risks")
     recommended_actions: str = Field(default="", description="Bullet list of recommended_actions")
+    locations: str = Field(default="", description="Information about main branch, sub-branches and global locations")
+    company_images: List[str] = Field(default_factory=list, description="Images related to the company")
 
 class ResearchResult(BaseModel):
     raw_answer: str

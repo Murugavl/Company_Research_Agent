@@ -10,6 +10,7 @@ class AgentState(TypedDict):
     chat_history: List[Dict[str, str]]
     current_plan: Optional[Dict[str, Any]]
     raw_research: str
+    images: List[str]
     sections_base: Dict[str, Any]
     sections_enriched: Dict[str, Any]
     final_sections: Dict[str, Any]

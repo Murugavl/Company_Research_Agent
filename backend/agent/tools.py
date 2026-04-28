@@ -32,6 +32,7 @@ class PartialPlan(BaseModel):
     opportunities: str = Field(default="")
     risks: str = Field(default="")
     recommended_actions: str = Field(default="")
+    locations: str = Field(default="")
 
 async def safe_json_parser(text: str, model: Type[BaseModel]) -> Dict[str, Any]:
     """
@@ -80,6 +81,7 @@ async def tavily_search(query: str):
         "api_key": settings.TAVILY_API_KEY,
         "query": query,
         "include_answer": True,
+        "include_images": True,
         "max_results": settings.TAVILY_MAX_RESULTS
     }
     
@@ -98,15 +100,16 @@ async def tavily_search(query: str):
             return data
         except Exception as e:
             logger.error(f"Tavily search failed: {e}")
-            return {"answer": "", "results": []}
+            return {"answer": "", "results": [], "images": []}
 
 async def research_company(company_name: str):
-    query = f"{company_name} company overview products services competitors financials market share employee count global presence"
+    query = f"{company_name} company overview products services competitors financials market share employee count locations main branch sub branches global presence"
     data = await tavily_search(query)
 
     return {
         "raw_answer": data.get("answer", ""),
-        "sources": data.get("results", [])
+        "sources": data.get("results", []),
+        "images": data.get("images", [])
     }
 
 def _get_empty_sections(raw_text: str = "") -> dict:
@@ -119,7 +122,8 @@ def _get_empty_sections(raw_text: str = "") -> dict:
         "key_contacts": "",
         "opportunities": "",
         "risks": "",
-        "recommended_actions": ""
+        "recommended_actions": "",
+        "locations": ""
     }
 
 async def split_into_sections(raw_text: str, company_name: str) -> dict:
@@ -128,7 +132,8 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
 
     prompt = f"""
     Break the following research text into structured sections for {company_name}.
-    Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions.
+    Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
+    For locations, include details about the main branch and any sub-branches or global presence.
     
     Focus on structuring existing information.
     
@@ -153,7 +158,8 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
     """Independently extract and enrich sections to be run concurrently with split."""
     prompt = f"""
     Based on the research for {company_name}, fill in any strategic gaps.
-    Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions.
+    Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
+    For locations, include details about the main branch and any sub-branches or global presence.
     
     Focus on strategic inference and missing context.
     

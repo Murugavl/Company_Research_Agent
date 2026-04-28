@@ -7,7 +7,7 @@ from config import settings
 def diff_plans(old_plan, new_plan):
     diff = {}
     for key, new_val in new_plan.items():
-        if key in ["company_name", "session_id", "researched_at", "id"]:
+        if key in ["company_name", "session_id", "researched_at", "id", "company_images"]:
             continue
         old_val = old_plan.get(key, "")
         if str(old_val).strip() != str(new_val).strip():
@@ -27,9 +27,13 @@ async def node_research(state: AgentState) -> Dict:
     # Aggregate answer and snippets from results for better context
     answer = res.get("raw_answer", "")
     snippets = "\n".join([f"- {r.get('content', '')}" for r in res.get("sources", [])])
+    images = res.get("images", [])
     
     combined = f"{answer}\n\nRELEVANT SNIPPETS:\n{snippets}"
-    return {"raw_research": combined.strip()}
+    # We will temporarily store images as a JSON string in raw_research to pass it through easily, 
+    # or better yet, we can add it directly to state but it's not in AgentState by default unless we add it.
+    # Since we can't easily add to AgentState without modifying state.py, we will inject it into sections_base later.
+    return {"raw_research": combined.strip(), "images": images}
 
 async def node_split(state: AgentState) -> Dict:
     """Analyze raw research and split into structured sections."""
@@ -51,6 +55,9 @@ async def node_merge(state: AgentState) -> Dict:
         # Enriched overwrites short/empty base values < 20 chars
         if not merged.get(k) or len(str(merged.get(k))) < 20:
             merged[k] = v
+            
+    # Include images from state if present
+    merged["company_images"] = state.get("images", [])
             
     return {"final_sections": merged}
 

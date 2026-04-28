@@ -162,6 +162,7 @@ Return ONLY the updated text.
         "chat_history": chat_history,
         "current_plan": current_plan.model_dump() if current_plan else None,
         "raw_research": "",
+        "images": [],
         "sections_base": {},
         "sections_enriched": {},
         "final_sections": {},
@@ -187,7 +188,9 @@ Return ONLY the updated text.
             key_contacts=final_sections.get("key_contacts", ""),
             opportunities=final_sections.get("opportunities", ""),
             risks=final_sections.get("risks", ""),
-            recommended_actions=final_sections.get("recommended_actions", "")
+            recommended_actions=final_sections.get("recommended_actions", ""),
+            locations=final_sections.get("locations", ""),
+            company_images=final_sections.get("company_images", [])
         )
         
         reply = result.get("reply", "I have completed the research.")
@@ -295,6 +298,7 @@ Return ONLY the updated text.
         "chat_history": chat_history,
         "current_plan": current_plan.model_dump() if current_plan else None,
         "raw_research": "",
+        "images": [],
         "sections_base": {},
         "sections_enriched": {},
         "final_sections": {},
@@ -360,7 +364,9 @@ Answer naturally and professionally based on the research.
             key_contacts=final_sections.get("key_contacts", ""),
             opportunities=final_sections.get("opportunities", ""),
             risks=final_sections.get("risks", ""),
-            recommended_actions=final_sections.get("recommended_actions", "")
+            recommended_actions=final_sections.get("recommended_actions", ""),
+            locations=final_sections.get("locations", ""),
+            company_images=final_sections.get("company_images", [])
         )
         
         new_history = chat_history + [
