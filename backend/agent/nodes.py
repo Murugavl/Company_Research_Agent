@@ -22,17 +22,28 @@ async def node_normalize(state: AgentState) -> Dict:
 
 async def node_research(state: AgentState) -> Dict:
     """Perform initial web research using Tavily."""
-    res = await research_company(state["company_name"])
+    company_name = state["company_name"]
+    
+    # Run main research and dedicated image search concurrently
+    research_task = asyncio.create_task(research_company(company_name))
+    image_search_query = f"{company_name} company logo headquarters office buildings representative images"
+    from .tools import tavily_search
+    image_task = asyncio.create_task(tavily_search(image_search_query))
+    
+    res, img_data = await asyncio.gather(research_task, image_task)
     
     # Aggregate answer and snippets from results for better context
     answer = res.get("raw_answer", "")
     snippets = "\n".join([f"- {r.get('content', '')}" for r in res.get("sources", [])])
+    
+    # Combine images from both searches
     images = res.get("images", [])
+    if img_data and img_data.get("images"):
+        # Use a dict to avoid duplicates and limit to 10 images
+        unique_images = list(dict.fromkeys(images + img_data.get("images", [])))
+        images = unique_images[:10]
     
     combined = f"{answer}\n\nRELEVANT SNIPPETS:\n{snippets}"
-    # We will temporarily store images as a JSON string in raw_research to pass it through easily, 
-    # or better yet, we can add it directly to state but it's not in AgentState by default unless we add it.
-    # Since we can't easily add to AgentState without modifying state.py, we will inject it into sections_base later.
     return {"raw_research": combined.strip(), "images": images}
 
 async def node_split(state: AgentState) -> Dict:

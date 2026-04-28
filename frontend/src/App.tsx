@@ -8,7 +8,7 @@ import {
   Bot, TrendingUp, Users, 
   ShieldAlert, Lightbulb, Target, Briefcase,
   Sparkles, ChevronRight, Activity, Globe,
-  AlertCircle, History, MessageSquare, LayoutGrid, Sun, Moon, MapPin
+  AlertCircle, History, MessageSquare, LayoutGrid, Sun, Moon, MapPin, X, ExternalLink
 } from "lucide-react";
 import { researchCompanyStream, generateSessionId } from "@/lib/api";
 import type { ChatMessage, AccountPlan, DiffResult } from "@/lib/types";
@@ -32,6 +32,7 @@ function App() {
   const [streamingReply, setStreamingReply] = useState("");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "plan">("chat");
+  const [selectedSection, setSelectedSection] = useState<{title: string, content: string, key: string} | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     return document.documentElement.classList.contains("dark") ? "dark" : "light";
   });
@@ -171,31 +172,38 @@ function App() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
         key={sectionKey}
+        onClick={() => setSelectedSection({ title, content, key: sectionKey })}
         className={cn(
-          "group h-full rounded-3xl border border-slate-200 dark:border-white/5 bg-slate-200/50 dark:bg-white/[0.03] backdrop-blur-md p-6 transition-all hover:bg-slate-200 dark:hover:bg-white/[0.05] hover:border-slate-300 dark:hover:border-white/10",
+          "group h-full rounded-3xl border border-slate-200 dark:border-white/5 bg-slate-200/50 dark:bg-white/[0.03] backdrop-blur-md p-6 transition-all hover:bg-slate-200 dark:hover:bg-white/[0.05] hover:border-primary/30 dark:hover:border-white/10 cursor-pointer hover:shadow-xl hover:shadow-primary/5",
           sectionKey === "overview" ? "md:col-span-2" : ""
         )}
       >
-        <div className="flex items-center gap-4 mb-6">
-          <div className={cn("p-3 rounded-2xl", colors)}>
-            {getSectionIcon(sectionKey)}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <div className={cn("p-3 rounded-2xl", colors)}>
+              {getSectionIcon(sectionKey)}
+            </div>
+            <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-white/50 group-hover:text-slate-700 dark:group-hover:text-white/80 transition-colors">
+              {title.replace(/_/g, " ")}
+            </h3>
           </div>
-          <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-white/50 group-hover:text-slate-700 dark:group-hover:text-white/80 transition-colors">
-            {title.replace(/_/g, " ")}
-          </h3>
+          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-primary transition-all group-hover:translate-x-1" />
         </div>
         <div className="space-y-4">
           {isList ? (
             <ul className="space-y-3">
-              {content.split("\n").filter(line => line.trim()).map((line, i) => (
+              {content.split("\n").filter(line => line.trim()).slice(0, 4).map((line, i) => (
                 <li key={i} className="flex items-start gap-3 text-sm leading-relaxed text-slate-700 dark:text-white/70">
                   <div className={cn("mt-1.5 w-1.5 h-1.5 rounded-full shrink-0", colors.split(" ")[0])} />
-                  <span>{line.replace(/^[•\-\*]\s*/, "")}</span>
+                  <span className="line-clamp-2">{line.replace(/^[•\-\*]\s*/, "")}</span>
                 </li>
               ))}
+              {content.split("\n").filter(line => line.trim()).length > 4 && (
+                <li className="text-[10px] font-black text-primary uppercase tracking-widest pt-2">View full analysis +</li>
+              )}
             </ul>
           ) : (
-            <p className="text-sm leading-relaxed text-slate-500 dark:text-white/70 whitespace-pre-wrap">{content}</p>
+            <p className="text-sm leading-relaxed text-slate-500 dark:text-white/70 line-clamp-4">{content}</p>
           )}
         </div>
       </motion.div>
@@ -525,6 +533,95 @@ function App() {
               sessionId={sessionId} 
               onClose={() => setIsHistoryOpen(false)} 
             />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {selectedSection && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+              onClick={() => setSelectedSection(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                className="bg-white dark:bg-[#121214] w-full max-w-4xl max-h-[85vh] rounded-[2.5rem] shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-10 py-8 border-b border-slate-200 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02]">
+                  <div className="flex items-center gap-5">
+                    <div className={cn("p-4 rounded-2xl shadow-lg", getSectionColor(selectedSection.key))}>
+                      {getSectionIcon(selectedSection.key)}
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white uppercase">
+                        {selectedSection.title.replace(/_/g, " ")}
+                      </h3>
+                      <p className="text-[10px] font-black text-slate-500 dark:text-white/30 uppercase tracking-[0.3em] mt-1">Deep Dive Analysis</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-full w-12 h-12 text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+                    onClick={() => setSelectedSection(null)}
+                  >
+                    <X className="w-6 h-6" />
+                  </Button>
+                </div>
+                
+                <ScrollArea className="flex-1 p-10">
+                  <div className="max-w-3xl mx-auto py-4">
+                    {[
+                      "competitors", 
+                      "opportunities", 
+                      "risks", 
+                      "recommended_actions", 
+                      "products_services",
+                      "locations"
+                    ].includes(selectedSection.key) ? (
+                      <ul className="space-y-6">
+                        {selectedSection.content.split("\n").filter(line => line.trim()).map((line, i) => (
+                          <motion.li 
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.05 }}
+                            key={i} 
+                            className="flex items-start gap-5 text-base leading-relaxed text-slate-700 dark:text-white/80 group/item"
+                          >
+                            <div className={cn("mt-2 w-2.5 h-2.5 rounded-full shrink-0 shadow-lg transition-transform group-hover/item:scale-125", getSectionColor(selectedSection.key).split(" ")[0])} />
+                            <div className="flex-1 space-y-2">
+                              <p className="font-medium">{line.replace(/^[•\-\*]\s*/, "")}</p>
+                            </div>
+                          </motion.li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="space-y-8">
+                         <p className="text-lg leading-relaxed text-slate-600 dark:text-white/80 font-medium whitespace-pre-wrap">
+                            {selectedSection.content}
+                         </p>
+                      </div>
+                    )}
+                    
+                    <div className="mt-16 pt-8 border-t border-slate-200 dark:border-white/5 flex items-center justify-between">
+                       <div className="flex items-center gap-3 text-slate-400 dark:text-white/20">
+                          <Activity className="w-4 h-4" />
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Verified Strategic Data</span>
+                       </div>
+                       <Button variant="outline" size="sm" className="rounded-xl font-bold text-[10px] uppercase tracking-widest border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5 transition-all h-10 px-6">
+                          <ExternalLink className="w-3 h-3 mr-2" />
+                          Source Citations
+                       </Button>
+                    </div>
+                  </div>
+                </ScrollArea>
+              </motion.div>
+            </motion.div>
           )}
         </AnimatePresence>
       </main>
