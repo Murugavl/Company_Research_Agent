@@ -134,6 +134,7 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
     Break the following research text into structured sections for {company_name}.
     Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
     For locations, include details about the main branch and any sub-branches or global presence.
+    CRITICAL: Every value in the JSON MUST be a string (use text or markdown bullet points). Do NOT return nested objects or dictionaries.
     
     Focus on structuring existing information.
     
@@ -160,6 +161,7 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
     Based on the research for {company_name}, fill in any strategic gaps.
     Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
     For locations, include details about the main branch and any sub-branches or global presence.
+    CRITICAL: Every value in the JSON MUST be a string (use text or markdown bullet points). Do NOT return nested objects or dictionaries.
     
     Focus on strategic inference and missing context.
     

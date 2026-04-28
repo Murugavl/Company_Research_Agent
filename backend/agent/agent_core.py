@@ -179,17 +179,17 @@ Return ONLY the updated text.
         # Extract results from state
         final_sections = result.get("final_sections", {})
         plan = AccountPlan(
-            company_name=result.get("company_name", company_name),
-            overview=final_sections.get("overview", ""),
-            products_services=final_sections.get("products_services", ""),
-            market_position=final_sections.get("market_position", ""),
-            competitors=final_sections.get("competitors", ""),
-            financial_snapshot=final_sections.get("financial_snapshot", ""),
-            key_contacts=final_sections.get("key_contacts", ""),
-            opportunities=final_sections.get("opportunities", ""),
-            risks=final_sections.get("risks", ""),
-            recommended_actions=final_sections.get("recommended_actions", ""),
-            locations=final_sections.get("locations", ""),
+            company_name=str(result.get("company_name", company_name)),
+            overview=str(final_sections.get("overview", "")),
+            products_services=str(final_sections.get("products_services", "")),
+            market_position=str(final_sections.get("market_position", "")),
+            competitors=str(final_sections.get("competitors", "")),
+            financial_snapshot=str(final_sections.get("financial_snapshot", "")),
+            key_contacts=str(final_sections.get("key_contacts", "")),
+            opportunities=str(final_sections.get("opportunities", "")),
+            risks=str(final_sections.get("risks", "")),
+            recommended_actions=str(final_sections.get("recommended_actions", "")),
+            locations=str(final_sections.get("locations", "")),
             company_images=final_sections.get("company_images", [])
         )
         
@@ -224,7 +224,7 @@ async def call_groq_stream(prompt: str):
                 yield chunk.choices[0].delta.content
     except Exception as e:
         logger.error(f"Groq Streaming API call failed: {e}")
-        yield "I encountered an error while streaming the response."
+        yield f"I encountered an error while streaming the response. Detail: {str(e)}"
 
 async def generate_agent_reply_stream(
         user_message: str,
@@ -355,17 +355,17 @@ Answer naturally and professionally based on the research.
         # Final plan yield
         final_sections = initial_state["final_sections"]
         plan_out = AccountPlan(
-            company_name=initial_state.get("company_name", company_name),
-            overview=final_sections.get("overview", ""),
-            products_services=final_sections.get("products_services", ""),
-            market_position=final_sections.get("market_position", ""),
-            competitors=final_sections.get("competitors", ""),
-            financial_snapshot=final_sections.get("financial_snapshot", ""),
-            key_contacts=final_sections.get("key_contacts", ""),
-            opportunities=final_sections.get("opportunities", ""),
-            risks=final_sections.get("risks", ""),
-            recommended_actions=final_sections.get("recommended_actions", ""),
-            locations=final_sections.get("locations", ""),
+            company_name=str(initial_state.get("company_name", company_name)),
+            overview=str(final_sections.get("overview", "")),
+            products_services=str(final_sections.get("products_services", "")),
+            market_position=str(final_sections.get("market_position", "")),
+            competitors=str(final_sections.get("competitors", "")),
+            financial_snapshot=str(final_sections.get("financial_snapshot", "")),
+            key_contacts=str(final_sections.get("key_contacts", "")),
+            opportunities=str(final_sections.get("opportunities", "")),
+            risks=str(final_sections.get("risks", "")),
+            recommended_actions=str(final_sections.get("recommended_actions", "")),
+            locations=str(final_sections.get("locations", "")),
             company_images=final_sections.get("company_images", [])
         )
         
@@ -383,6 +383,6 @@ Answer naturally and professionally based on the research.
         }
 
     except Exception as e:
-        logger.error(f"Streaming research failed: {e}")
-        yield {"type": "token", "content": "I encountered an error while researching. Please try again."}
+        logger.error(f"Streaming research failed: {e}", exc_info=True)
+        yield {"type": "token", "content": f"I encountered an error while researching. Please try again. Error: {str(e)}"}
 
