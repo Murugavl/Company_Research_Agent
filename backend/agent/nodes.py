@@ -7,7 +7,7 @@ from config import settings
 def diff_plans(old_plan, new_plan):
     diff = {}
     for key, new_val in new_plan.items():
-        if key in ["company_name", "session_id", "researched_at", "id", "company_images"]:
+        if key in ["company_name", "session_id", "researched_at", "id", "company_images", "sources"]:
             continue
         old_val = old_plan.get(key, "")
         if str(old_val).strip() != str(new_val).strip():

@@ -1,4 +1,4 @@
-from database.differ import diff_plans
+from agent.nodes import diff_plans
 
 def test_diff_detects_change():
     old = {"overview": "old text", "risks": "none"}

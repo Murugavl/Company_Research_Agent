@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { X, Clock, History as HistoryIcon } from "lucide-react";
-import { getHistory } from "@/lib/api";
-import { formatRelativeTime, cn } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/utils";
 
 interface HistoryPanelProps {
   companyName: string;

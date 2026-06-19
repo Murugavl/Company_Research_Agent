@@ -8,7 +8,7 @@ import {
   Bot, TrendingUp, Users, 
   ShieldAlert, Lightbulb, Target, Briefcase,
   Sparkles, ChevronRight, Activity, Globe,
-  AlertCircle, History, MessageSquare, LayoutGrid, Sun, Moon, MapPin, X, ExternalLink
+  History, MessageSquare, LayoutGrid, Sun, Moon, MapPin, X, ExternalLink
 } from "lucide-react";
 import { researchCompanyStream, generateSessionId } from "@/lib/api";
 import type { ChatMessage, AccountPlan, DiffResult } from "@/lib/types";
@@ -33,6 +33,8 @@ function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "plan">("chat");
   const [selectedSection, setSelectedSection] = useState<{title: string, content: string, key: string} | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [showSources, setShowSources] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     return document.documentElement.classList.contains("dark") ? "dark" : "light";
   });
@@ -124,6 +126,10 @@ function App() {
     setCompanyName("");
     setUserMessage("");
     setStreamingReply("");
+    
+    // Also clear session storage for this session
+    sessionStorage.removeItem(`history_${sessionId}`);
+    addToast({ type: "success", message: "System environment purged. All local buffers cleared." });
   };
 
   const getSectionIcon = (key: string) => {
@@ -505,8 +511,15 @@ function App() {
                   {plan.company_images && plan.company_images.length > 0 && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {plan.company_images.slice(0, 4).map((img, idx) => (
-                        <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 group bg-slate-100 dark:bg-white/[0.02]">
+                        <div 
+                          key={idx} 
+                          onClick={() => setSelectedImage(img)}
+                          className="relative aspect-video rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 group bg-slate-100 dark:bg-white/[0.02] cursor-zoom-in"
+                        >
                           <img src={img} alt={`${companyName} reference`} className="object-cover w-full h-full opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700" />
+                          <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                             <Sparkles className="text-white w-6 h-6" />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -516,7 +529,7 @@ function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {renderSection("Executive Overview", plan.overview, "overview")}
                     {Object.entries(plan)
-                      .filter(([key]) => key !== "overview" && key !== "company_name" && key !== "company_images" && key !== "session_id" && key !== "id" && key !== "researched_at")
+                      .filter(([key]) => key !== "overview" && key !== "company_name" && key !== "company_images" && key !== "sources" && key !== "session_id" && key !== "id" && key !== "researched_at")
                       .map(([key, value]) => renderSection(key, value as string, key))
                     }
                   </div>
@@ -608,18 +621,91 @@ function App() {
                       </div>
                     )}
                     
+                    <AnimatePresence>
+                      {showSources && plan?.sources && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="mt-8 pt-8 border-t border-slate-200 dark:border-white/5 space-y-4 overflow-hidden"
+                        >
+                          <h4 className="text-[10px] font-black text-slate-400 dark:text-white/20 uppercase tracking-[0.3em] mb-4">Strategic Intelligence Sources</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {plan.sources.map((source, idx) => (
+                              <a 
+                                key={idx}
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 hover:border-primary/30 transition-all group/source"
+                              >
+                                <p className="text-xs font-bold text-slate-700 dark:text-white/70 line-clamp-1 mb-1 group-hover/source:text-primary transition-colors">{source.title}</p>
+                                <p className="text-[10px] text-slate-400 dark:text-white/20 line-clamp-1 italic">{source.url}</p>
+                              </a>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    
                     <div className="mt-16 pt-8 border-t border-slate-200 dark:border-white/5 flex items-center justify-between">
                        <div className="flex items-center gap-3 text-slate-400 dark:text-white/20">
                           <Activity className="w-4 h-4" />
                           <span className="text-[10px] font-black uppercase tracking-[0.2em]">Verified Strategic Data</span>
                        </div>
-                       <Button variant="outline" size="sm" className="rounded-xl font-bold text-[10px] uppercase tracking-widest border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5 transition-all h-10 px-6">
+                       <Button 
+                         variant="outline" 
+                         size="sm" 
+                         onClick={() => setShowSources(!showSources)}
+                         className={cn(
+                           "rounded-xl font-bold text-[10px] uppercase tracking-widest border-slate-300 dark:border-white/10 transition-all h-10 px-6",
+                           showSources ? "bg-primary text-slate-900 border-primary" : "text-slate-600 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5"
+                         )}
+                       >
                           <ExternalLink className="w-3 h-3 mr-2" />
-                          Source Citations
+                          {showSources ? "Hide Citations" : "Source Citations"}
                        </Button>
                     </div>
                   </div>
                 </ScrollArea>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {selectedImage && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[110] flex items-center justify-center p-8 bg-black/90 backdrop-blur-xl"
+              onClick={() => setSelectedImage(null)}
+            >
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute top-10 right-10 rounded-full w-14 h-14 text-white/40 hover:text-white hover:bg-white/10 transition-all z-[120]"
+                onClick={() => setSelectedImage(null)}
+              >
+                <X className="w-8 h-8" />
+              </Button>
+              
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="relative max-w-7xl max-h-full rounded-3xl overflow-hidden shadow-2xl border border-white/10"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img src={selectedImage} alt="Fullscreen preview" className="max-w-full max-h-[90vh] object-contain" />
+                <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black/80 to-transparent">
+                   <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary rounded-lg">
+                         <Building2 className="w-4 h-4 text-white" />
+                      </div>
+                      <p className="text-white font-bold tracking-tight">{companyName} Visionary Assets</p>
+                   </div>
+                </div>
               </motion.div>
             </motion.div>
           )}
