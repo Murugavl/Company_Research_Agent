@@ -85,13 +85,13 @@ async def node_reply(state: AgentState) -> Dict[str, Any]:
     """Generate the final natural language reply for the user."""
     from .agent_core import call_groq, SYSTEM_INSTRUCTIONS
     
-    plan_dict = state["final_sections"]
+    overview_text = state["final_sections"].get("overview", "")
     history = state["chat_history"]
     
     prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 Company: {state['company_name']}
-Structured info: {plan_dict}
+Executive Overview: {overview_text}
 Chat History: {history}
 User message: {state['user_message']}
 

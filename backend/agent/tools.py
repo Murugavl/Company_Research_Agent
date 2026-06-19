@@ -206,9 +206,9 @@ async def research_company(company_name: str):
         "images": data.get("images", [])
     }
 
-def _get_empty_sections(raw_text: str = "") -> dict:
+def _get_empty_sections() -> dict:
     return {
-        "overview": raw_text if raw_text else "",
+        "overview": "",
         "products_services": "",
         "market_position": "",
         "competitors": "",
@@ -229,6 +229,7 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
     Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
     For locations, include details about the main branch and any sub-branches or global presence.
     CRITICAL: Every value in the JSON MUST be a comprehensive, detailed string (at least 3-5 bullet points or 2 detailed paragraphs per section). Use markdown bullet points for lists. Do NOT return nested objects or dictionaries.
+    CRITICAL: Never use '#' or markdown headers (like #, ##, ###) for headings inside the section text. Instead, use bold text (like **Heading Name**) for all headings.
     
     Raw text:
     {raw_text}
@@ -239,14 +240,15 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
             model=settings.GROQ_MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            max_tokens=2500
+            max_tokens=2500,
+            response_format={"type": "json_object"}
         )
         text = response.choices[0].message.content
         parsed = await safe_json_parser(text, PartialPlan)
         return parsed
     except Exception as e:
         logger.error(f"Error in split_into_sections: {e}")
-        return _get_empty_sections(raw_text)
+        raise e
 
 async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
     """Independently extract and enrich sections to be run concurrently with split."""
@@ -255,6 +257,7 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
     Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
     For locations, include details about the main branch and any sub-branches or global presence.
     CRITICAL: Every value in the JSON MUST be a comprehensive, detailed string (at least 3-5 bullet points or 2 detailed paragraphs per section). Provide specific names, data points, and strategic insights where possible. Do NOT return nested objects or dictionaries.
+    CRITICAL: Never use '#' or markdown headers (like #, ##, ###) for headings inside the section text. Instead, use bold text (like **Heading Name**) for all headings.
     
     Focus on strategic inference, market trends, and missing context.
     
@@ -267,11 +270,12 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
             model=settings.GROQ_MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.6,
-            max_tokens=2500
+            max_tokens=2500,
+            response_format={"type": "json_object"}
         )
         text = response.choices[0].message.content
         parsed = await safe_json_parser(text, PartialPlan)
         return parsed
     except Exception as e:
         logger.error(f"Error in complete_missing_sections: {e}")
-        return _get_empty_sections()
+        raise e

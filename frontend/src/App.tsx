@@ -8,7 +8,7 @@ import {
   Bot, TrendingUp, Users, 
   ShieldAlert, Lightbulb, Target, Briefcase,
   Sparkles, ChevronRight, Activity, Globe,
-  History, MessageSquare, LayoutGrid, Sun, Moon, MapPin, X, ExternalLink
+  MessageSquare, LayoutGrid, Sun, Moon, MapPin, X, ExternalLink
 } from "lucide-react";
 import { researchCompanyStream, generateSessionId } from "@/lib/api";
 import type { ChatMessage, AccountPlan, DiffResult } from "@/lib/types";
@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/ToastContainer";
 import { ExportButton } from "@/components/ExportButton";
-import { HistoryPanel } from "@/components/HistoryPanel";
+
 import { PlanSkeleton } from "@/components/PlanSkeleton";
 
 function App() {
@@ -30,7 +30,6 @@ function App() {
   const [diffResult, setDiffResult] = useState<DiffResult>({});
   const [isLoading, setIsLoading] = useState(false);
   const [streamingReply, setStreamingReply] = useState("");
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<"chat" | "plan">("chat");
   const [selectedSection, setSelectedSection] = useState<{title: string, content: string, key: string} | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -90,19 +89,6 @@ function App() {
           setCompanyName(result.company_name);
           setStreamingReply("");
 
-          // Update session storage for timeline
-          const storageKey = `history_${sessionId}`;
-          const currentHistoryStr = sessionStorage.getItem(storageKey);
-          let sessHistory = [];
-          if (currentHistoryStr) {
-             try { sessHistory = JSON.parse(currentHistoryStr); } catch(e){}
-          }
-          sessHistory.unshift({
-             company_name: result.company_name,
-             researched_at: new Date().toISOString(),
-             overview: result.plan.overview || "Updated profile"
-          });
-          sessionStorage.setItem(storageKey, JSON.stringify(sessHistory));
         },
         (errMsg) => {
           if (errMsg.includes("Invalid input detected")) {
@@ -127,8 +113,6 @@ function App() {
     setUserMessage("");
     setStreamingReply("");
     
-    // Also clear session storage for this session
-    sessionStorage.removeItem(`history_${sessionId}`);
     addToast({ type: "success", message: "System environment purged. All local buffers cleared." });
   };
 
@@ -264,10 +248,7 @@ function App() {
             <RotateCcw className="w-3.5 h-3.5 mr-2" />
             Wipe System
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setIsHistoryOpen(true)} className="rounded-full px-6 text-slate-500 hover:text-slate-900 dark:text-white/40 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-all font-bold tracking-widest text-[10px] uppercase">
-            <History className="w-3.5 h-3.5 mr-2" />
-            Timeline
-          </Button>
+
         </div>
       </header>
 
@@ -539,15 +520,7 @@ function App() {
           </ScrollArea>
         </section>
 
-        <AnimatePresence>
-          {isHistoryOpen && (
-            <HistoryPanel 
-              companyName={companyName} 
-              sessionId={sessionId} 
-              onClose={() => setIsHistoryOpen(false)} 
-            />
-          )}
-        </AnimatePresence>
+
 
         <AnimatePresence>
           {selectedSection && (
@@ -658,8 +631,10 @@ function App() {
                          size="sm" 
                          onClick={() => setShowSources(!showSources)}
                          className={cn(
-                           "rounded-xl font-bold text-[10px] uppercase tracking-widest border-slate-300 dark:border-white/10 transition-all h-10 px-6",
-                           showSources ? "bg-primary text-slate-900 border-primary" : "text-slate-600 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5"
+                           "rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all h-10 px-6",
+                           showSources 
+                             ? "bg-primary text-white border-primary hover:bg-primary/90" 
+                             : "bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-white border-slate-300 dark:border-white/20 hover:bg-slate-200 dark:hover:bg-white/20"
                          )}
                        >
                           <ExternalLink className="w-3 h-3 mr-2" />

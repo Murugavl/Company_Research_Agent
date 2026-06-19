@@ -17,15 +17,13 @@ MODEL_NAME = settings.GROQ_MODEL_NAME
 SYSTEM_INSTRUCTIONS = """
 You are a company research assistant.
 Rules:
-- Answer naturally and professionally. Do not mention any 'account plan' or internal sections.
-- Use a short 1–2 line intro, then markdown bullet points where helpful.
-- When the user asks to update a specific section, rewrite only that section and return just the updated text.
-- When the user asks general questions, answer directly using research and reasonable inference.
+- Answer naturally and professionally.
+- On a new company research request, the chat reply (on the left side) should ONLY contain the executive overview/summary of the company in a brief, premium summary or short description. Do not list out all other sections (like products/services, market position, opportunities, etc.) in the chat reply.
+- When the user asks to update, modify, or get more details on a specific section, rewrite ONLY that section based on the request and return the updated text.
+- Never use '#' or markdown headers (like #, ##, ###) for any headings. Instead, use bold text (like **Heading Name**) for all headings.
 - Keep the tone concise, clear, and business-focused.
 - Never reuse any text from earlier answers.
-- Never bring in content from previously discussed companies.
 - Only talk about the company currently mentioned by the user.
-- Ignore chat history unless the user is continuing the same company discussion.
 """
 
 SECTION_KEYWORDS: Dict[str, List[str]] = {
@@ -40,7 +38,13 @@ SECTION_KEYWORDS: Dict[str, List[str]] = {
     "recommended_actions": ["recommendation", "action"],
 }
 
-UPDATE_KEYWORDS = ["update", "change", "edit", "modify", "rewrite", "revise"]
+UPDATE_KEYWORDS = [
+    "update", "change", "edit", "modify", "rewrite", "revise", 
+    "detail", "details", "elaborate", "expand", "add", "more about", 
+    "tell me more", "more info", "more information", "give info", 
+    "provide info", "remove", "delete", "clear", "wipe", "exclude", 
+    "omit"
+]
 
 def detect_target_section(user_message: str) -> Optional[str]:
     msg = user_message.lower()
@@ -134,18 +138,51 @@ async def generate_agent_reply(
     if current_plan and target_section and wants_update:
         logger.info(f"Rapid update for section: {target_section} - {company_name}")
         plan_dict = current_plan.model_dump()
-        update_prompt = f"""
+        
+        # Check if it's a request to delete/remove the entire section
+        is_entire_deletion = False
+        msg_lower = user_message.lower()
+        if any(w in msg_lower for w in ["remove", "delete", "clear", "wipe"]):
+            if len(msg_lower) < 35 and not any(w in msg_lower for w in ["point", "bullet", "paragraph", "line", "sentence", "specific"]):
+                is_entire_deletion = True
+                
+        if is_entire_deletion:
+            new_text = ""
+        else:
+            needs_research = any(w in user_message.lower() for w in ["detail", "more", "expand", "update", "add", "elaborate"])
+            research_context = ""
+            if needs_research:
+                try:
+                    from .tools import tavily_search
+                    search_query = f"{company_name} {target_section} {user_message}"
+                    res = await tavily_search(search_query)
+                    answer = res.get("answer", "")
+                    snippets = "\n".join([f"- {r.get('content', '')}" for r in res.get("results", [])])
+                    research_context = f"{answer}\n\nRELEVANT SNIPPETS:\n{snippets}"
+                except Exception as e:
+                    logger.error(f"Tavily search during update failed: {e}")
+                    
+            update_prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 Rewrite ONLY the '{target_section}' section.
 Company: {company_name}
-Current text: {plan_dict.get(target_section)}
+Current text of this section: {plan_dict.get(target_section)}
+New research info: {research_context}
 User request: {user_message}
-Return ONLY the updated text.
+
+Rules for update:
+- Expand, correct, update, or remove content in the current text as specified by the user request.
+- If the user request asks to remove this section entirely, return an empty string.
+- If the user request asks to remove specific points, return the text with those points removed.
+- Use the new research info if provided to enrich the text with fresh, specific facts, names, and details.
+- Never use '#' or markdown headers (like #, ##, ###) for headings. Instead, use bold text (like **Heading Name**) for all headings.
+- Return ONLY the updated section text (or an empty string if the section is deleted). Do not include any introductory or explanatory text.
 """
-        new_text = call_groq(update_prompt).strip()
+            new_text = call_groq(update_prompt).strip()
+            
         setattr(current_plan, target_section, new_text)
         
-        reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_text}"
+        reply = f"The {target_section.replace('_', ' ').title()} section has been removed." if is_entire_deletion else f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_text}"
         new_history = chat_history + [
             {"role": "user", "content": user_message},
             {"role": "assistant", "content": reply},
@@ -211,20 +248,16 @@ Return ONLY the updated text.
 
 async def call_groq_stream(prompt: str):
     """Async generator to stream tokens from Groq."""
-    try:
-        response = groq_client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=2000,
-            stream=True
-        )
-        for chunk in response:
-            if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
-    except Exception as e:
-        logger.error(f"Groq Streaming API call failed: {e}")
-        yield f"I encountered an error while streaming the response. Detail: {str(e)}"
+    response = groq_client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_tokens=2000,
+        stream=True
+    )
+    for chunk in response:
+        if chunk.choices and chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content
 
 async def generate_agent_reply_stream(
         user_message: str,
@@ -258,24 +291,66 @@ async def generate_agent_reply_stream(
     # Handle Rapid Update
     if current_plan and target_section and wants_update:
         plan_dict = current_plan.model_dump()
-        prompt = f"""
+        
+        # Check if it's a request to delete/remove the entire section
+        is_entire_deletion = False
+        msg_lower = user_message.lower()
+        if any(w in msg_lower for w in ["remove", "delete", "clear", "wipe"]):
+            if len(msg_lower) < 35 and not any(w in msg_lower for w in ["point", "bullet", "paragraph", "line", "sentence", "specific"]):
+                is_entire_deletion = True
+                
+        if is_entire_deletion:
+            full_reply = f"The {target_section.replace('_', ' ').title()} section has been removed."
+            yield {"type": "token", "content": full_reply}
+        else:
+            needs_research = any(w in user_message.lower() for w in ["detail", "more", "expand", "update", "add", "elaborate"])
+            research_context = ""
+            if needs_research:
+                try:
+                    from .tools import tavily_search
+                    search_query = f"{company_name} {target_section} {user_message}"
+                    res = await tavily_search(search_query)
+                    answer = res.get("answer", "")
+                    snippets = "\n".join([f"- {r.get('content', '')}" for r in res.get("results", [])])
+                    research_context = f"{answer}\n\nRELEVANT SNIPPETS:\n{snippets}"
+                except Exception as e:
+                    logger.error(f"Tavily search during update failed: {e}")
+                    
+            prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 Rewrite ONLY the '{target_section}' section.
 Company: {company_name}
-Current text: {plan_dict.get(target_section)}
+Current text of this section: {plan_dict.get(target_section)}
+New research info: {research_context}
 User request: {user_message}
-Return ONLY the updated text.
+
+Rules for update:
+- Expand, correct, update, or remove content in the current text as specified by the user request.
+- If the user request asks to remove this section entirely, return an empty string.
+- If the user request asks to remove specific points, return the text with those points removed.
+- Use the new research info if provided to enrich the text with fresh, specific facts, names, and details.
+- Never use '#' or markdown headers (like #, ##, ###) for headings. Instead, use bold text (like **Heading Name**) for all headings.
+- Return ONLY the updated section text (or an empty string if the section is deleted). Do not include any introductory or explanatory text.
 """
-        full_reply = ""
-        async for token in call_groq_stream(prompt):
-            full_reply += token
-            yield {"type": "token", "content": token}
+            full_reply = ""
+            try:
+                async for token in call_groq_stream(prompt):
+                    full_reply += token
+                    yield {"type": "token", "content": token}
+            except Exception as e:
+                logger.error(f"Rapid update streaming failed: {e}")
+                error_msg = str(e)
+                friendly_error = "I encountered a temporary service interruption while updating the section. Please try again."
+                if "429" in error_msg:
+                    friendly_error = "Rate limit reached. Please wait a moment before trying again."
+                yield {"type": "token", "content": friendly_error}
+                return
         
         # Update the plan object
-        setattr(current_plan, target_section, full_reply.strip())
+        setattr(current_plan, target_section, "" if is_entire_deletion else full_reply.strip())
         
         # Prepare final output
-        final_reply = f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{full_reply.strip()}"
+        final_reply = full_reply if is_entire_deletion else f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{full_reply.strip()}"
         new_history = chat_history + [
             {"role": "user", "content": user_message},
             {"role": "assistant", "content": final_reply},
@@ -331,21 +406,30 @@ Return ONLY the updated text.
         s_merge = await node_merge(initial_state)
         initial_state.update(s_merge)
         
-        # Now stream the reply
-        plan_dict = initial_state["final_sections"]
+        # Now stream the reply using only the Executive Overview section to prevent 413 TPM overflow
+        overview_text = initial_state["final_sections"].get("overview", "")
         prompt = f"""
 {SYSTEM_INSTRUCTIONS}
 Company: {initial_state['company_name']}
-Structured info: {plan_dict}
+Executive Overview: {overview_text}
 Chat History: {initial_state['chat_history']}
 User message: {initial_state['user_message']}
 
 Answer naturally and professionally based on the research.
 """
         full_reply = ""
-        async for token in call_groq_stream(prompt):
-            full_reply += token
-            yield {"type": "token", "content": token}
+        try:
+            async for token in call_groq_stream(prompt):
+                full_reply += token
+                yield {"type": "token", "content": token}
+        except Exception as e:
+            logger.error(f"Reply streaming failed: {e}")
+            error_msg = str(e)
+            friendly_error = "Intelligence gathered successfully. The canvas on the right has been updated. (Note: The text summary hit a temporary rate limit.)"
+            if "429" in error_msg:
+                friendly_error = f"Intelligence gathered successfully on {initial_state['company_name']}! The canvas on the right has been updated with the latest research. (Note: The natural language summary hit a temporary Groq rate limit, but your core plan data is ready.)"
+            yield {"type": "token", "content": friendly_error}
+            full_reply = friendly_error
             
         initial_state["reply"] = full_reply.strip()
         
