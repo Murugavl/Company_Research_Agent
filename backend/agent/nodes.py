@@ -9,6 +9,17 @@ def diff_plans(old_plan, new_plan):
     for key, new_val in new_plan.items():
         if key in ["company_name", "session_id", "researched_at", "id", "company_images", "sources"]:
             continue
+        if key == "extra_sections":
+            old_extra = old_plan.get("extra_sections") or {}
+            new_extra = new_val or {}
+            for ck, cv in new_extra.items():
+                ov = old_extra.get(ck, "")
+                if str(ov).strip() != str(cv).strip():
+                    diff[ck] = {"old": str(ov).strip(), "new": str(cv).strip()}
+            for ck, ov in old_extra.items():
+                if ck not in new_extra:
+                    diff[ck] = {"old": str(ov).strip(), "new": ""}
+            continue
         old_val = old_plan.get(key, "")
         if str(old_val).strip() != str(new_val).strip():
             diff[key] = {"old": str(old_val).strip(), "new": str(new_val).strip()}
@@ -78,6 +89,10 @@ async def node_merge(state: AgentState) -> Dict:
     # Include images and sources from state if present
     merged["company_images"] = state.get("images", [])
     merged["sources"] = state.get("sources", [])
+    
+    # Preserve existing extra sections if a research node runs on an existing plan
+    current_plan = state.get("current_plan") or {}
+    merged["extra_sections"] = current_plan.get("extra_sections", {})
             
     return {"final_sections": merged}
 

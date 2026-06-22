@@ -156,7 +156,27 @@ async def safe_json_parser(text: str, model: Type[BaseModel]) -> Dict[str, Any]:
             logger.error(f"No JSON structure found in text. Raw content: {text}")
             raise ValueError("No JSON structure found in text")
 
-    # 5. Validate against Pydantic model
+    # 5. Flatten any nested dict values to strings (LLM sometimes returns dicts instead of strings)
+    if isinstance(data, dict):
+        for key, val in list(data.items()):
+            if isinstance(val, dict):
+                # If all values in the nested dict are strings, concatenate them
+                if all(isinstance(v, str) for v in val.values()):
+                    flat = "\n".join(v for v in val.values() if v)
+                else:
+                    # Flatten nested dict with keys as bold headers
+                    flat = "\n".join(f"**{k}**\n{v}" for k, v in val.items())
+                data[key] = flat
+            elif isinstance(val, list):
+                # Join list items with newlines if they are strings
+                if all(isinstance(item, str) for item in val):
+                    data[key] = "\n".join(f"- {item}" for item in val)
+                else:
+                    data[key] = str(val)
+            elif not isinstance(val, str):
+                data[key] = str(val)
+
+    # 6. Validate against Pydantic model
     try:
         validated = model(**data)
         return validated.model_dump()
@@ -226,10 +246,16 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
 
     prompt = f"""
     Break the following research text into structured sections for {company_name}.
-    Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
+    Return ONLY a single, valid, compact JSON object (no newlines within string values, no Python-style string concatenation).
+    Use these exact keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
     For locations, include details about the main branch and any sub-branches or global presence.
-    CRITICAL: Every value in the JSON MUST be a comprehensive, detailed string (at least 3-5 bullet points or 2 detailed paragraphs per section). Use markdown bullet points for lists. Do NOT return nested objects or dictionaries.
-    CRITICAL: Never use '#' or markdown headers (like #, ##, ###) for headings inside the section text. Instead, use bold text (like **Heading Name**) for all headings.
+    CRITICAL JSON RULES:
+    - Every value MUST be a single JSON string (not an object, not an array, not multiline Python concatenation).
+    - Use \\n for line breaks within string values. Do NOT split a string value across multiple quoted lines.
+    - Provide at least 2-3 bullet points or 1 detailed paragraph per section.
+    - Use markdown bullet points (- item) for lists. Bold text for sub-headings (e.g. **Heading**).
+    - Never use '#' or markdown headers inside section text.
+    - Return ONLY the JSON object. No explanation, no preamble.
     
     Raw text:
     {raw_text}
@@ -240,24 +266,32 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
             model=settings.GROQ_MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            max_tokens=2500,
-            response_format={"type": "json_object"}
+            max_tokens=4000
+            # NOTE: No response_format constraint - we handle JSON parsing ourselves
+            # to avoid Groq's server-side json_validate_failed errors
         )
         text = response.choices[0].message.content
         parsed = await safe_json_parser(text, PartialPlan)
         return parsed
     except Exception as e:
         logger.error(f"Error in split_into_sections: {e}")
-        raise e
+        # Return empty sections rather than crashing the graph
+        return _get_empty_sections()
 
 async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
     """Independently extract and enrich sections to be run concurrently with split."""
     prompt = f"""
     Based on the research for {company_name}, perform a deep strategic analysis to fill in any gaps.
-    Return ONLY valid JSON with keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
+    Return ONLY a single, valid, compact JSON object (no newlines within string values, no Python-style string concatenation).
+    Use these exact keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
     For locations, include details about the main branch and any sub-branches or global presence.
-    CRITICAL: Every value in the JSON MUST be a comprehensive, detailed string (at least 3-5 bullet points or 2 detailed paragraphs per section). Provide specific names, data points, and strategic insights where possible. Do NOT return nested objects or dictionaries.
-    CRITICAL: Never use '#' or markdown headers (like #, ##, ###) for headings inside the section text. Instead, use bold text (like **Heading Name**) for all headings.
+    CRITICAL JSON RULES:
+    - Every value MUST be a single JSON string (not an object, not an array, not multiline Python concatenation).
+    - Use \\n for line breaks within string values. Do NOT split a string value across multiple quoted lines.
+    - Provide specific names, data points, and strategic insights. At least 2-3 bullet points or 1 detailed paragraph per section.
+    - Use markdown bullet points (- item) for lists. Bold text for sub-headings (e.g. **Heading**).
+    - Never use '#' or markdown headers inside section text.
+    - Return ONLY the JSON object. No explanation, no preamble.
     
     Focus on strategic inference, market trends, and missing context.
     
@@ -270,12 +304,13 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
             model=settings.GROQ_MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.6,
-            max_tokens=2500,
-            response_format={"type": "json_object"}
+            max_tokens=4000
+            # NOTE: No response_format constraint - we handle JSON parsing ourselves
         )
         text = response.choices[0].message.content
         parsed = await safe_json_parser(text, PartialPlan)
         return parsed
     except Exception as e:
         logger.error(f"Error in complete_missing_sections: {e}")
-        raise e
+        # Return empty sections rather than crashing the graph
+        return _get_empty_sections()

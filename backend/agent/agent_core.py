@@ -36,6 +36,7 @@ SECTION_KEYWORDS: Dict[str, List[str]] = {
     "opportunities": ["opportunity", "growth"],
     "risks": ["risk", "challenge"],
     "recommended_actions": ["recommendation", "action"],
+    "locations": ["location", "branch", "office", "headquarter", "presence"],
 }
 
 UPDATE_KEYWORDS = [
@@ -46,17 +47,132 @@ UPDATE_KEYWORDS = [
     "omit"
 ]
 
+COMMON_CUSTOM_SECTIONS = {
+    'history', 'founding', 'founding story', 'background', 'origin', 'origins',
+    'culture', 'work environment', 'values', 'workplace',
+    'technology', 'tech stack', 'technology stack', 'infrastructure', 'architecture',
+    'sustainability', 'esg', 'environment', 'environmental',
+    'customers', 'clients', 'partnerships', 'partners',
+    'funding', 'investment', 'investors', 'ipo',
+    'supply chain', 'manufacturing', 'logistics',
+    'legal', 'legal issues', 'controversies', 'lawsuits',
+    'future plans', 'roadmap', 'vision', 'strategy'
+}
+
 def detect_target_section(user_message: str) -> Optional[str]:
+    import re
     msg = user_message.lower()
-    for section, words in SECTION_KEYWORDS.items():
+    order = [
+        "products_services", "market_position", "competitors", "financial_snapshot",
+        "key_contacts", "opportunities", "risks", "recommended_actions", "locations", "overview"
+    ]
+    for section in order:
+        words = SECTION_KEYWORDS[section]
         for w in words:
-            if w in msg:
-                return section
+            if w == "about the company":
+                # Only match "about the company" if it's the end of the query or followed by overview/summary/itself
+                pattern = r"\babout the company\b(?:\s+(?:itself|overview|summary|details))?\s*\??$"
+                if re.search(pattern, msg):
+                    return section
+            else:
+                # Use starting word boundary to avoid substring match (e.g. "frisk" -> "risk")
+                if re.search(r"\b" + re.escape(w), msg):
+                    return section
     return None
 
 def is_update_intent(user_message: str) -> bool:
     msg = user_message.lower()
     return any(w in msg for w in UPDATE_KEYWORDS)
+
+TELL_ME_ABOUT_PATTERN = [
+    r'tell me (?:more )?about (?:the )?(?:company(?:\'s)? )?(.+?)(?:\s+(?:of|for|in|at|by|from|with)\b.+)?$',
+    r'(?:give|provide|show) me (?:the )?(?:company(?:\'s)? )?(.+?) (?:info(?:rmation)?|data|details?|section)',
+    r'(?:what(?:\'s| is) the )?company(?:\'s)? (.+?)(?:\?|$)',
+    r'add (?:a |the )?(.+?) section',
+    r'include (?:the )?(.+?) (?:section|info)',
+]
+
+STANDARD_SECTION_NAMES = {
+    'overview', 'summary', 'about', 'products', 'services', 'products and services',
+    'market', 'position', 'market position', 'competitors', 'competition',
+    'financial', 'financials', 'finance', 'financial snapshot', 'revenue', 'profit',
+    'contacts', 'key contacts', 'stakeholders', 'opportunities', 'growth',
+    'risks', 'challenges', 'recommended actions', 'recommendations',
+    'locations', 'offices', 'headquarters', 'branches'
+}
+
+def _extract_section_from_pattern(user_message: str) -> Optional[str]:
+    """Fast regex-based extraction of section name from 'tell me about X' patterns."""
+    import re
+    msg = user_message.lower().strip().rstrip('?.')
+    for pattern in TELL_ME_ABOUT_PATTERN:
+        m = re.search(pattern, msg, re.IGNORECASE)
+        if m:
+            candidate = m.group(1).strip()
+            # Remove leading possessive/determiner words
+            candidate = re.sub(r'^(?:their|its|this|the|a|an)\s+', '', candidate)
+            # Skip if it matches a standard section name
+            if candidate.lower() in STANDARD_SECTION_NAMES:
+                return None
+            # Skip common stop-word-only results
+            if candidate.lower() in {'it', 'them', 'this', 'that', 'they', 'company', 'business', 'firm'}:
+                return None
+            # Skip if too long or too short
+            if 3 <= len(candidate) <= 40:
+                # Capitalize properly
+                return ' '.join(w.capitalize() for w in candidate.split())
+    return None
+
+def extract_custom_section_name(user_message: str) -> Optional[str]:
+    # First try fast regex extraction
+    fast_result = _extract_section_from_pattern(user_message)
+    if fast_result:
+        # Check if it contains any common custom section keywords
+        words = set(fast_result.lower().split())
+        if any(w in COMMON_CUSTOM_SECTIONS for w in words) or fast_result.lower() in COMMON_CUSTOM_SECTIONS:
+            return fast_result
+    
+    # Analyze user message to extract clean custom section name.
+    prompt = f"""
+    Analyze the user message to see if they are asking to add, update, retrieve, or learn about a new specific topic or section for a company profile that is NOT one of these standard sections:
+    - Overview, Products & Services, Market Position, Competitors, Financial Snapshot, Key Contacts, Opportunities, Risks, Recommended Actions, Locations
+
+    Examples of NEW topics/sections to detect (not in the standard list above):
+    - history, founding story, background, origin
+    - culture, work environment, values
+    - technology stack, tech stack, infrastructure
+    - sustainability, ESG, environment
+    - customers, clients, partnerships
+    - funding, investment, investors
+    - supply chain, manufacturing
+    - legal issues, controversies
+    - future plans, roadmap
+
+    If the user is asking about a new topic or section like those above, return ONLY the clean capitalized name (e.g., "History", "Company Culture", "Technology Stack").
+    If the message matches a standard section, is general chat, or is unclear, return "NONE".
+
+    User message: "{user_message}"
+    
+    Clean topic name or "NONE":
+    """
+    try:
+        response = groq_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=20
+        )
+        ans = response.choices[0].message.content.strip() if response.choices else "NONE"
+        if ans.upper() == "NONE" or not ans:
+            return None
+        # Clean it up: remove quotes, periods, and ensure it's not too long
+        ans = ans.replace('"', '').replace("'", "").replace(".", "").replace("**", "").replace("*", "").strip()
+        if len(ans) > 40:
+            return None
+        return ans
+    except Exception as e:
+        logger.error(f"Error extracting custom section name: {e}")
+        return None
 
 def call_groq(prompt: str) -> str:
     try:
@@ -105,6 +221,56 @@ def get_last_company_from_history(chat_history: List[Dict[str, str]]) -> Optiona
                     return possible
     return None
 
+def preprocess_agent_request(
+    user_message: str,
+    company_name: str,
+    current_plan: Optional[AccountPlan],
+    chat_history: List[Dict[str, str]]
+) -> Tuple[str, Optional[str], bool, bool]:
+    target_section = detect_target_section(user_message)
+    is_custom_section = False
+    wants_update = is_update_intent(user_message)
+    
+    if current_plan:
+        if current_plan.extra_sections:
+            msg_lower = user_message.lower()
+            for custom_name in current_plan.extra_sections.keys():
+                if custom_name.lower() in msg_lower:
+                    target_section = custom_name
+                    is_custom_section = True
+                    break
+        
+        if not target_section:
+            extracted = extract_custom_section_name(user_message)
+            if extracted:
+                target_section = extracted
+                is_custom_section = True
+
+    is_section_request = (target_section is not None)
+    
+    if is_section_request and current_plan:
+        wants_update = True
+        last_company = get_last_company_from_history(chat_history)
+        if last_company:
+            company_name = last_company
+    else:
+        candidate = normalize_company_name(user_message)
+        banned = {
+            "can", "you", "tell", "about", "update", "its", "the", "edit", "hello", "hi", "hey",
+            "founding", "history", "culture", "funding", "technology", "sustainability", 
+            "competitor", "competitors", "competition", "product", "products", "service", "services", 
+            "market", "position", "financial", "financials", "finance", "revenue", "profit", 
+            "contact", "contacts", "opportunity", "opportunities", "risk", "risks", 
+            "recommendation", "recommendations", "location", "locations", "overview", "summary"
+        }
+        if candidate and not any(w in banned for w in candidate.lower().split()):
+            if candidate.lower() != company_name.lower():
+                current_plan = None
+            company_name = candidate
+
+    company_name = normalize_company_name(company_name)
+    return company_name, target_section, wants_update, is_custom_section
+
 async def generate_agent_reply(
         user_message: str,
         company_name: str,
@@ -117,39 +283,30 @@ async def generate_agent_reply(
     Uses LangGraph for the research orchestration.
     """
     
-    target_section = detect_target_section(user_message)
-    wants_update = is_update_intent(user_message)
-
-    if wants_update:
-        last_company = get_last_company_from_history(chat_history)
-        if last_company:
-            company_name = last_company
-    else:
-        candidate = normalize_company_name(user_message)
-        banned = {"can", "you", "tell", "about", "update", "its", "the", "edit"}
-        if candidate and not any(w in banned for w in candidate.lower().split()):
-            if candidate != company_name:
-                current_plan = None
-            company_name = candidate
-
-    company_name = normalize_company_name(company_name)
+    company_name, target_section, wants_update, is_custom_section = preprocess_agent_request(
+        user_message, company_name, current_plan, chat_history
+    )
 
     # Specific section update request on an existing plan
     if current_plan and target_section and wants_update:
-        logger.info(f"Rapid update for section: {target_section} - {company_name}")
-        plan_dict = current_plan.model_dump()
+        logger.info(f"Rapid update for section: {target_section} - {company_name} (custom: {is_custom_section})")
         
         # Check if it's a request to delete/remove the entire section
         is_entire_deletion = False
         msg_lower = user_message.lower()
-        if any(w in msg_lower for w in ["remove", "delete", "clear", "wipe"]):
-            if len(msg_lower) < 35 and not any(w in msg_lower for w in ["point", "bullet", "paragraph", "line", "sentence", "specific"]):
+        if any(w in msg_lower for w in ["remove", "delete", "clear", "wipe", "exclude", "omit"]):
+            if len(msg_lower) < 65 and not any(w in msg_lower for w in ["point", "bullet", "paragraph", "line", "sentence", "specific"]):
                 is_entire_deletion = True
                 
+        current_text = current_plan.extra_sections.get(target_section, "") if is_custom_section else getattr(current_plan, target_section, "")
+        
         if is_entire_deletion:
             new_text = ""
         else:
-            needs_research = any(w in user_message.lower() for w in ["detail", "more", "expand", "update", "add", "elaborate"])
+            needs_research = any(w in user_message.lower() for w in ["detail", "more", "expand", "update", "add", "elaborate", "fetch", "get", "tell me", "what is"])
+            if is_custom_section:
+                needs_research = True
+                
             research_context = ""
             if needs_research:
                 try:
@@ -166,7 +323,7 @@ async def generate_agent_reply(
 {SYSTEM_INSTRUCTIONS}
 Rewrite ONLY the '{target_section}' section.
 Company: {company_name}
-Current text of this section: {plan_dict.get(target_section)}
+Current text of this section: {current_text}
 New research info: {research_context}
 User request: {user_message}
 
@@ -180,14 +337,31 @@ Rules for update:
 """
             new_text = call_groq(update_prompt).strip()
             
-        setattr(current_plan, target_section, new_text)
-        
+        # Update the plan object
+        if is_custom_section:
+            if not current_plan.extra_sections:
+                current_plan.extra_sections = {}
+            if is_entire_deletion:
+                if target_section in current_plan.extra_sections:
+                    del current_plan.extra_sections[target_section]
+            else:
+                current_plan.extra_sections[target_section] = new_text
+        else:
+            setattr(current_plan, target_section, new_text)
+            
+        # Compute dynamic diff
+        diff_result = {}
+        old_val_str = str(current_text).strip()
+        new_val_str = str(new_text).strip()
+        if old_val_str != new_val_str:
+            diff_result[target_section] = {"old": old_val_str, "new": new_val_str}
+            
         reply = f"The {target_section.replace('_', ' ').title()} section has been removed." if is_entire_deletion else f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{new_text}"
         new_history = chat_history + [
             {"role": "user", "content": user_message},
             {"role": "assistant", "content": reply},
         ]
-        return reply, current_plan, new_history, {}
+        return reply, current_plan, new_history, diff_result
 
     # Otherwise, perform research using LangGraph
     logger.info(f"Invoking research graph for {company_name}")
@@ -227,7 +401,9 @@ Rules for update:
             risks=str(final_sections.get("risks", "")),
             recommended_actions=str(final_sections.get("recommended_actions", "")),
             locations=str(final_sections.get("locations", "")),
-            company_images=final_sections.get("company_images", [])
+            company_images=final_sections.get("company_images", []),
+            sources=final_sections.get("sources", []),
+            extra_sections=final_sections.get("extra_sections", {})
         )
         
         reply = result.get("reply", "I have completed the research.")
@@ -270,40 +446,30 @@ async def generate_agent_reply_stream(
     Async generator that performs research and then streams the reply tokens.
     Final yield is the plan and diff metadata.
     """
-    # 1. Normalization & Intent Detection
-    target_section = detect_target_section(user_message)
-    wants_update = is_update_intent(user_message)
-
-    if wants_update:
-        last_company = get_last_company_from_history(chat_history)
-        if last_company:
-            company_name = last_company
-    else:
-        candidate = normalize_company_name(user_message)
-        banned = {"can", "you", "tell", "about", "update", "its", "the", "edit"}
-        if candidate and not any(w in banned for w in candidate.lower().split()):
-            if candidate != company_name:
-                current_plan = None
-            company_name = candidate
-
-    company_name = normalize_company_name(company_name)
+    # 1. Preprocessing
+    company_name, target_section, wants_update, is_custom_section = preprocess_agent_request(
+        user_message, company_name, current_plan, chat_history
+    )
 
     # Handle Rapid Update
     if current_plan and target_section and wants_update:
-        plan_dict = current_plan.model_dump()
-        
         # Check if it's a request to delete/remove the entire section
         is_entire_deletion = False
         msg_lower = user_message.lower()
-        if any(w in msg_lower for w in ["remove", "delete", "clear", "wipe"]):
-            if len(msg_lower) < 35 and not any(w in msg_lower for w in ["point", "bullet", "paragraph", "line", "sentence", "specific"]):
+        if any(w in msg_lower for w in ["remove", "delete", "clear", "wipe", "exclude", "omit"]):
+            if len(msg_lower) < 65 and not any(w in msg_lower for w in ["point", "bullet", "paragraph", "line", "sentence", "specific"]):
                 is_entire_deletion = True
                 
+        current_text = current_plan.extra_sections.get(target_section, "") if is_custom_section else getattr(current_plan, target_section, "")
+        
         if is_entire_deletion:
             full_reply = f"The {target_section.replace('_', ' ').title()} section has been removed."
             yield {"type": "token", "content": full_reply}
         else:
-            needs_research = any(w in user_message.lower() for w in ["detail", "more", "expand", "update", "add", "elaborate"])
+            needs_research = any(w in user_message.lower() for w in ["detail", "more", "expand", "update", "add", "elaborate", "fetch", "get", "tell me", "what is"])
+            if is_custom_section:
+                needs_research = True
+                
             research_context = ""
             if needs_research:
                 try:
@@ -320,7 +486,7 @@ async def generate_agent_reply_stream(
 {SYSTEM_INSTRUCTIONS}
 Rewrite ONLY the '{target_section}' section.
 Company: {company_name}
-Current text of this section: {plan_dict.get(target_section)}
+Current text of this section: {current_text}
 New research info: {research_context}
 User request: {user_message}
 
@@ -347,7 +513,24 @@ Rules for update:
                 return
         
         # Update the plan object
-        setattr(current_plan, target_section, "" if is_entire_deletion else full_reply.strip())
+        new_text = "" if is_entire_deletion else full_reply.strip()
+        if is_custom_section:
+            if not current_plan.extra_sections:
+                current_plan.extra_sections = {}
+            if is_entire_deletion:
+                if target_section in current_plan.extra_sections:
+                    del current_plan.extra_sections[target_section]
+            else:
+                current_plan.extra_sections[target_section] = new_text
+        else:
+            setattr(current_plan, target_section, new_text)
+            
+        # Compute dynamic diff
+        diff_result = {}
+        old_val_str = str(current_text).strip()
+        new_val_str = str(new_text).strip()
+        if old_val_str != new_val_str:
+            diff_result[target_section] = {"old": old_val_str, "new": new_val_str}
         
         # Prepare final output
         final_reply = full_reply if is_entire_deletion else f"Here is the updated {target_section.replace('_', ' ').title()} section:\n\n{full_reply.strip()}"
@@ -359,7 +542,7 @@ Rules for update:
         yield {
             "type": "plan",
             "plan": current_plan.model_dump(),
-            "diff_result": {},
+            "diff_result": diff_result,
             "chat_history": new_history,
             "company_name": company_name
         }
@@ -452,7 +635,8 @@ Answer naturally and professionally based on the research.
             recommended_actions=str(final_sections.get("recommended_actions", "")),
             locations=str(final_sections.get("locations", "")),
             company_images=final_sections.get("company_images", []),
-            sources=final_sections.get("sources", [])
+            sources=final_sections.get("sources", []),
+            extra_sections=final_sections.get("extra_sections", {})
         )
         
         new_history = chat_history + [

@@ -21,6 +21,72 @@ import { ExportButton } from "@/components/ExportButton";
 
 import { PlanSkeleton } from "@/components/PlanSkeleton";
 
+interface ParsedBlock {
+  type: "heading" | "list-item" | "paragraph";
+  text: string;
+}
+
+function parseMarkdown(text: string, isListSection: boolean = false): ParsedBlock[] {
+  if (!text) return [];
+  const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const blocks: ParsedBlock[] = [];
+
+  for (const line of lines) {
+    const hasAsterisksWrap = (line.startsWith("**") && line.endsWith("**")) ||
+                             (line.startsWith("*") && line.endsWith("**")) ||
+                             (line.startsWith("**") && line.endsWith("*")) ||
+                             (line.startsWith("*") && line.endsWith("*") && !line.startsWith("* "));
+    
+    const cleanLine = line.replace(/^[\*]+/, "").replace(/[\*]+$/, "").trim();
+
+    if (hasAsterisksWrap && cleanLine.length > 0) {
+      blocks.push({
+        type: "heading",
+        text: cleanLine
+      });
+      continue;
+    }
+
+    const listMarkerRegex = /^([•\-\*\+]\s*|\d+\.\s*)/;
+    if (listMarkerRegex.test(line)) {
+      blocks.push({
+        type: "list-item",
+        text: line.replace(listMarkerRegex, "").trim()
+      });
+      continue;
+    }
+
+    if (isListSection) {
+      blocks.push({
+        type: "list-item",
+        text: line
+      });
+    } else {
+      blocks.push({
+        type: "paragraph",
+        text: line
+      });
+    }
+  }
+  return blocks;
+}
+
+function renderTextWithInlineFormatting(text: string) {
+  const parts = text.split(/\*\*([^*]+)\*\*/g);
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      return <strong key={index} className="font-bold text-slate-900 dark:text-white">{part}</strong>;
+    }
+    const subParts = part.split(/\*([^*]+)\*/g);
+    return subParts.map((subPart, subIndex) => {
+      if (subIndex % 2 === 1) {
+        return <strong key={`${index}-${subIndex}`} className="font-bold text-slate-900 dark:text-white">{subPart}</strong>;
+      }
+      return subPart;
+    });
+  });
+}
+
 function App() {
   const [sessionId] = useState(() => generateSessionId());
   const [userMessage, setUserMessage] = useState("");
@@ -141,9 +207,7 @@ function App() {
     }
   };
 
-  const renderSection = (title: string, content: string, sectionKey: string) => {
-    if (!content) return null;
-    
+  const renderFormattedContent = (content: string, sectionKey: string, limit: number = -1, isModal: boolean = false) => {
     const isList = [
       "competitors", 
       "opportunities", 
@@ -153,6 +217,94 @@ function App() {
       "locations"
     ].includes(sectionKey);
 
+    const blocks = parseMarkdown(content, isList);
+    const colors = getSectionColor(sectionKey);
+
+    // If limit is specified, we slice the blocks to limit the preview size (e.g. for Bento cards)
+    const displayBlocks = limit > 0 ? blocks.slice(0, limit) : blocks;
+
+    const textSize = isModal ? "text-base text-slate-700 dark:text-white/80" : "text-sm text-slate-600 dark:text-white/70";
+    const headingSize = isModal ? "text-lg font-bold text-slate-900 dark:text-white mt-6 mb-3 uppercase tracking-wider" : "text-sm font-bold text-slate-800 dark:text-white mt-4 mb-2 uppercase tracking-wider";
+    const bulletSize = isModal ? "w-2 h-2 mt-2" : "w-1.5 h-1.5 mt-1.5";
+
+    return (
+      <div className={cn("space-y-4", isModal ? "space-y-6" : "space-y-3")}>
+        {displayBlocks.map((block, idx) => {
+          if (block.type === "heading") {
+            return (
+              <h4 key={idx} className={headingSize}>
+                {renderTextWithInlineFormatting(block.text)}
+              </h4>
+            );
+          } else if (block.type === "list-item") {
+            return (
+              <div key={idx} className={cn("flex items-start gap-3 leading-relaxed", textSize)}>
+                <div className={cn("rounded-full shrink-0 bg-current", bulletSize, colors.split(" ")[0])} />
+                <span className="flex-1">{renderTextWithInlineFormatting(block.text)}</span>
+              </div>
+            );
+          } else {
+            return (
+              <p key={idx} className={cn("leading-relaxed", textSize)}>
+                {renderTextWithInlineFormatting(block.text)}
+              </p>
+            );
+          }
+        })}
+        {limit > 0 && blocks.length > limit && (
+          <p className="text-[10px] font-black text-primary uppercase tracking-widest pt-2">View full analysis +</p>
+        )}
+      </div>
+    );
+  };
+
+  const renderChatMessage = (content: string, isStreaming: boolean = false) => {
+    if (!content) return null;
+    const lines = content.split("\n");
+    return (
+      <div className="space-y-2">
+        {lines.map((line, idx) => {
+          const isLast = isStreaming && idx === lines.length - 1;
+          const listMarkerRegex = /^([•\-\*\+]\s*|\d+\.\s*)/;
+          const isHeading = (line.startsWith("**") || (line.startsWith("*") && !line.startsWith("* "))) && 
+                            (line.endsWith("**") || line.endsWith("*")) &&
+                            line.replace(/^[\*]+/, "").replace(/[\*]+$/, "").trim().length > 0;
+
+          if (isHeading) {
+            const cleanLine = line.replace(/^[\*]+/, "").replace(/[\*]+$/, "").trim();
+            return (
+              <h4 key={idx} className="font-bold mt-3 mb-1 text-slate-900 dark:text-white text-sm">
+                {renderTextWithInlineFormatting(cleanLine)}
+                {isLast && <span className="animate-pulse font-bold text-primary ml-1">▋</span>}
+              </h4>
+            );
+          } else if (listMarkerRegex.test(line)) {
+            const cleanLine = line.replace(listMarkerRegex, "").trim();
+            return (
+              <div key={idx} className="flex items-start gap-2 text-sm leading-relaxed mt-1">
+                <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-primary mt-1.5" />
+                <span className="flex-1">
+                  {renderTextWithInlineFormatting(cleanLine)}
+                  {isLast && <span className="animate-pulse font-bold text-primary ml-1">▋</span>}
+                </span>
+              </div>
+            );
+          } else {
+            return (
+              <p key={idx} className="mt-1 leading-relaxed">
+                {renderTextWithInlineFormatting(line)}
+                {isLast && <span className="animate-pulse font-bold text-primary ml-1">▋</span>}
+              </p>
+            );
+          }
+        })}
+      </div>
+    );
+  };
+
+  const renderSection = (title: string, content: string, sectionKey: string) => {
+    if (!content) return null;
+    
     const colors = getSectionColor(sectionKey);
 
     return (
@@ -179,23 +331,7 @@ function App() {
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-primary transition-all group-hover:translate-x-1" />
         </div>
-        <div className="space-y-4">
-          {isList ? (
-            <ul className="space-y-3">
-              {content.split("\n").filter(line => line.trim()).slice(0, 4).map((line, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm leading-relaxed text-slate-700 dark:text-white/70">
-                  <div className={cn("mt-1.5 w-1.5 h-1.5 rounded-full shrink-0", colors.split(" ")[0])} />
-                  <span className="line-clamp-2">{line.replace(/^[•\-\*]\s*/, "")}</span>
-                </li>
-              ))}
-              {content.split("\n").filter(line => line.trim()).length > 4 && (
-                <li className="text-[10px] font-black text-primary uppercase tracking-widest pt-2">View full analysis +</li>
-              )}
-            </ul>
-          ) : (
-            <p className="text-sm leading-relaxed text-slate-500 dark:text-white/70 line-clamp-4">{content}</p>
-          )}
-        </div>
+        {renderFormattedContent(content, sectionKey, 4)}
       </motion.div>
     );
   };
@@ -333,7 +469,7 @@ function App() {
                         ? "bg-primary/20 border-primary/30 rounded-tr-none text-slate-900 dark:text-white font-medium" 
                         : "bg-slate-200/50 dark:bg-white/[0.03] border-slate-200 dark:border-white/5 rounded-tl-none text-slate-700 dark:text-white/80"
                     )}>
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                      {renderChatMessage(msg.content)}
                     </div>
                   </motion.div>
                 ))}
@@ -349,10 +485,7 @@ function App() {
                       <Bot className="w-4 h-4 animate-pulse" />
                     </div>
                     <div className="max-w-[85%] rounded-[2rem] px-6 py-5 text-sm leading-relaxed shadow-2xl border backdrop-blur-sm bg-slate-200/50 dark:bg-white/[0.03] border-slate-200 dark:border-white/5 rounded-tl-none text-slate-700 dark:text-white/80">
-                      <p className="whitespace-pre-wrap">
-                        {streamingReply}
-                        <span className="animate-pulse font-bold text-primary ml-1">▋</span>
-                      </p>
+                      {renderChatMessage(streamingReply, true)}
                     </div>
                   </motion.div>
                 )}
@@ -510,9 +643,12 @@ function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {renderSection("Executive Overview", plan.overview, "overview")}
                     {Object.entries(plan)
-                      .filter(([key]) => key !== "overview" && key !== "company_name" && key !== "company_images" && key !== "sources" && key !== "session_id" && key !== "id" && key !== "researched_at")
+                      .filter(([key]) => key !== "overview" && key !== "company_name" && key !== "company_images" && key !== "sources" && key !== "session_id" && key !== "id" && key !== "researched_at" && key !== "extra_sections")
                       .map(([key, value]) => renderSection(key, value as string, key))
                     }
+                    {plan.extra_sections && Object.entries(plan.extra_sections).map(([key, value]) => 
+                      renderSection(key, value, key)
+                    )}
                   </div>
                 </div>
               )}
@@ -562,37 +698,7 @@ function App() {
                 
                 <ScrollArea className="flex-1 p-10">
                   <div className="max-w-3xl mx-auto py-4">
-                    {[
-                      "competitors", 
-                      "opportunities", 
-                      "risks", 
-                      "recommended_actions", 
-                      "products_services",
-                      "locations"
-                    ].includes(selectedSection.key) ? (
-                      <ul className="space-y-6">
-                        {selectedSection.content.split("\n").filter(line => line.trim()).map((line, i) => (
-                          <motion.li 
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: i * 0.05 }}
-                            key={i} 
-                            className="flex items-start gap-5 text-base leading-relaxed text-slate-700 dark:text-white/80 group/item"
-                          >
-                            <div className={cn("mt-2 w-2.5 h-2.5 rounded-full shrink-0 shadow-lg transition-transform group-hover/item:scale-125", getSectionColor(selectedSection.key).split(" ")[0])} />
-                            <div className="flex-1 space-y-2">
-                              <p className="font-medium">{line.replace(/^[•\-\*]\s*/, "")}</p>
-                            </div>
-                          </motion.li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="space-y-8">
-                         <p className="text-lg leading-relaxed text-slate-600 dark:text-white/80 font-medium whitespace-pre-wrap">
-                            {selectedSection.content}
-                         </p>
-                      </div>
-                    )}
+                    {renderFormattedContent(selectedSection.content, selectedSection.key, -1, true)}
                     
                     <AnimatePresence>
                       {showSources && plan?.sources && (

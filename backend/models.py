@@ -15,6 +15,7 @@ class AccountPlanModel(BaseModel):
     locations: str = Field(default="", description="Information about main branch, sub-branches and global locations")
     company_images: List[str] = Field(default_factory=list, description="Images related to the company")
     sources: List[dict] = Field(default_factory=list, description="Source citations with title and url")
+    extra_sections: Dict[str, str] = Field(default_factory=dict, description="Custom sections dynamic dictionary")
 
 class ResearchResult(BaseModel):
     raw_answer: str
