@@ -240,6 +240,19 @@ def _get_empty_sections() -> dict:
         "locations": ""
     }
 
+def clean_placeholders(data_dict: dict, company_name: str) -> dict:
+    """Scan and replace bracketed placeholders like [insert location] with honest missing-data messaging."""
+    placeholder_pattern = re.compile(r'\[(?:insert|location|insert location|insert locations|city, country)[^\]]*\]|\<insert[^\>]*\>', re.IGNORECASE)
+    
+    cleaned = {}
+    for k, v in data_dict.items():
+        if isinstance(v, str) and placeholder_pattern.search(v):
+            v_clean = placeholder_pattern.sub(f"Information not specified for {company_name}", v)
+            cleaned[k] = v_clean
+        else:
+            cleaned[k] = v
+    return cleaned
+
 async def split_into_sections(raw_text: str, company_name: str) -> dict:
     if not raw_text or not raw_text.strip():
         return _get_empty_sections()
@@ -249,12 +262,13 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
     Return ONLY a single, valid, compact JSON object (no newlines within string values, no Python-style string concatenation).
     Use these exact keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
     For locations, include details about the main branch and any sub-branches or global presence.
-    CRITICAL JSON RULES:
+    CRITICAL JSON & ACCURACY RULES:
     - Every value MUST be a single JSON string (not an object, not an array, not multiline Python concatenation).
     - Use \\n for line breaks within string values. Do NOT split a string value across multiple quoted lines.
     - Provide at least 2-3 bullet points or 1 detailed paragraph per section.
     - Use markdown bullet points (- item) for lists. Bold text for sub-headings (e.g. **Heading**).
     - Never use '#' or markdown headers inside section text.
+    - STRICT HONESTY: NEVER output template placeholders such as [insert location], [insert ...], [Location], or bracketed blanks. If location or other information is not specified in the research, state clearly: "Information is not specified for {company_name}."
     - Return ONLY the JSON object. No explanation, no preamble.
     
     Raw text:
@@ -267,15 +281,12 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=4000
-            # NOTE: No response_format constraint - we handle JSON parsing ourselves
-            # to avoid Groq's server-side json_validate_failed errors
         )
         text = response.choices[0].message.content
         parsed = await safe_json_parser(text, PartialPlan)
-        return parsed
+        return clean_placeholders(parsed, company_name)
     except Exception as e:
         logger.error(f"Error in split_into_sections: {e}")
-        # Return empty sections rather than crashing the graph
         return _get_empty_sections()
 
 async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
@@ -285,12 +296,13 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
     Return ONLY a single, valid, compact JSON object (no newlines within string values, no Python-style string concatenation).
     Use these exact keys: overview, products_services, market_position, competitors, financial_snapshot, key_contacts, opportunities, risks, recommended_actions, locations.
     For locations, include details about the main branch and any sub-branches or global presence.
-    CRITICAL JSON RULES:
+    CRITICAL JSON & ACCURACY RULES:
     - Every value MUST be a single JSON string (not an object, not an array, not multiline Python concatenation).
     - Use \\n for line breaks within string values. Do NOT split a string value across multiple quoted lines.
     - Provide specific names, data points, and strategic insights. At least 2-3 bullet points or 1 detailed paragraph per section.
     - Use markdown bullet points (- item) for lists. Bold text for sub-headings (e.g. **Heading**).
     - Never use '#' or markdown headers inside section text.
+    - STRICT HONESTY: NEVER output template placeholders such as [insert location], [insert ...], [Location], or bracketed blanks. NEVER hallucinate false data for another company. If details for a section are unavailable, state clearly that details are not specified for {company_name}.
     - Return ONLY the JSON object. No explanation, no preamble.
     
     Focus on strategic inference, market trends, and missing context.
@@ -305,12 +317,11 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
             messages=[{"role": "user", "content": prompt}],
             temperature=0.6,
             max_tokens=4000
-            # NOTE: No response_format constraint - we handle JSON parsing ourselves
         )
         text = response.choices[0].message.content
         parsed = await safe_json_parser(text, PartialPlan)
-        return parsed
+        return clean_placeholders(parsed, company_name)
     except Exception as e:
         logger.error(f"Error in complete_missing_sections: {e}")
-        # Return empty sections rather than crashing the graph
         return _get_empty_sections()
+

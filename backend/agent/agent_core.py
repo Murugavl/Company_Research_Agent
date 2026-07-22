@@ -23,7 +23,8 @@ Rules:
 - Never use '#' or markdown headers (like #, ##, ###) for any headings. Instead, use bold text (like **Heading Name**) for all headings.
 - Keep the tone concise, clear, and business-focused.
 - Never reuse any text from earlier answers.
-- Only talk about the company currently mentioned by the user.
+- Only talk about the company currently mentioned by the user. NEVER switch context to another company unless explicitly instructed by the user to switch or research a new company.
+- STRICT ACCURACY & NO PLACEHOLDERS: NEVER output template placeholders such as '[insert location]', '[insert ...]', '[Location]', '<insert...>', 'N/A', or bracketed blanks. NEVER invent false information or reference other companies. If information for a requested topic/location is not specified or available for the company, state clearly that it is not publicly specified or available for that company.
 """
 
 SECTION_KEYWORDS: Dict[str, List[str]] = {
@@ -56,7 +57,8 @@ COMMON_CUSTOM_SECTIONS = {
     'funding', 'investment', 'investors', 'ipo',
     'supply chain', 'manufacturing', 'logistics',
     'legal', 'legal issues', 'controversies', 'lawsuits',
-    'future plans', 'roadmap', 'vision', 'strategy'
+    'future plans', 'roadmap', 'vision', 'strategy',
+    'employee count', 'employees', 'workforce', 'headcount'
 }
 
 def detect_target_section(user_message: str) -> Optional[str]:
@@ -90,6 +92,8 @@ TELL_ME_ABOUT_PATTERN = [
     r'(?:what(?:\'s| is) the )?company(?:\'s)? (.+?)(?:\?|$)',
     r'add (?:a |the )?(.+?) section',
     r'include (?:the )?(.+?) (?:section|info)',
+    r'add (.+?)(?:\s+in|\s+to|\s+for|\s+this)?',
+    r'how many (.+?)(?:\s+in|\s+for|\s+does|\s+are)?',
 ]
 
 STANDARD_SECTION_NAMES = {
@@ -124,10 +128,14 @@ def _extract_section_from_pattern(user_message: str) -> Optional[str]:
     return None
 
 def extract_custom_section_name(user_message: str) -> Optional[str]:
-    # First try fast regex extraction
+    # Check for employee keywords
+    msg_lower = user_message.lower()
+    if any(w in msg_lower for w in ["employee", "employees", "headcount", "workforce", "staff"]):
+        return "Employee Count"
+
+    # Fast regex extraction
     fast_result = _extract_section_from_pattern(user_message)
     if fast_result:
-        # Check if it contains any common custom section keywords
         words = set(fast_result.lower().split())
         if any(w in COMMON_CUSTOM_SECTIONS for w in words) or fast_result.lower() in COMMON_CUSTOM_SECTIONS:
             return fast_result
@@ -147,8 +155,9 @@ def extract_custom_section_name(user_message: str) -> Optional[str]:
     - supply chain, manufacturing
     - legal issues, controversies
     - future plans, roadmap
+    - employee count, workforce, headcount
 
-    If the user is asking about a new topic or section like those above, return ONLY the clean capitalized name (e.g., "History", "Company Culture", "Technology Stack").
+    If the user is asking about a new topic or section like those above, return ONLY the clean capitalized name (e.g., "History", "Company Culture", "Employee Count").
     If the message matches a standard section, is general chat, or is unclear, return "NONE".
 
     User message: "{user_message}"
@@ -165,7 +174,6 @@ def extract_custom_section_name(user_message: str) -> Optional[str]:
         ans = response.choices[0].message.content.strip() if response.choices else "NONE"
         if ans.upper() == "NONE" or not ans:
             return None
-        # Clean it up: remove quotes, periods, and ensure it's not too long
         ans = ans.replace('"', '').replace("'", "").replace(".", "").replace("**", "").replace("*", "").strip()
         if len(ans) > 40:
             return None
@@ -216,10 +224,20 @@ def get_last_company_from_history(chat_history: List[Dict[str, str]]) -> Optiona
         if msg["role"] == "user":
             possible = normalize_company_name(msg["content"])
             if possible and len(possible.split()) <= 3:
-                banned = {"can", "you", "tell", "update", "its", "about", "the"}
+                banned = {"can", "you", "tell", "update", "its", "about", "the", "add", "how", "many", "employee", "employees"}
                 if not any(w in banned for w in possible.lower().split()):
                     return possible
     return None
+
+def is_sentence_or_query(msg: str) -> bool:
+    words = msg.lower().strip().split()
+    query_markers = {
+        "could", "would", "can", "please", "add", "show", "tell", "give", "get", "what", "how",
+        "where", "who", "when", "why", "many", "much", "employee", "employees", "staff", "workforce",
+        "headcount", "this", "that", "the", "company", "their", "its", "it", "more", "info",
+        "information", "detail", "details", "section", "about", "is", "are", "do", "does"
+    }
+    return len(words) > 3 or any(w in query_markers for w in words)
 
 def preprocess_agent_request(
     user_message: str,
@@ -227,6 +245,8 @@ def preprocess_agent_request(
     current_plan: Optional[AccountPlan],
     chat_history: List[Dict[str, str]]
 ) -> Tuple[str, Optional[str], bool, bool]:
+    active_company = company_name or (current_plan.company_name if current_plan else "")
+
     target_section = detect_target_section(user_message)
     is_custom_section = False
     wants_update = is_update_intent(user_message)
@@ -248,11 +268,10 @@ def preprocess_agent_request(
 
     is_section_request = (target_section is not None)
     
-    if is_section_request and current_plan:
-        wants_update = True
-        last_company = get_last_company_from_history(chat_history)
-        if last_company:
-            company_name = last_company
+    if (is_section_request or is_sentence_or_query(user_message)) and active_company:
+        company_name = active_company
+        if is_section_request:
+            wants_update = True
     else:
         candidate = normalize_company_name(user_message)
         banned = {
@@ -261,15 +280,20 @@ def preprocess_agent_request(
             "competitor", "competitors", "competition", "product", "products", "service", "services", 
             "market", "position", "financial", "financials", "finance", "revenue", "profit", 
             "contact", "contacts", "opportunity", "opportunities", "risk", "risks", 
-            "recommendation", "recommendations", "location", "locations", "overview", "summary"
+            "recommendation", "recommendations", "location", "locations", "overview", "summary",
+            "employee", "employees", "workforce", "headcount", "staff", "could", "would", "how", "many"
         }
         if candidate and not any(w in banned for w in candidate.lower().split()):
-            if candidate.lower() != company_name.lower():
+            if active_company and candidate.lower() != active_company.lower():
                 current_plan = None
             company_name = candidate
+        elif active_company:
+            company_name = active_company
 
-    company_name = normalize_company_name(company_name)
+    if company_name:
+        company_name = normalize_company_name(company_name)
     return company_name, target_section, wants_update, is_custom_section
+
 
 async def generate_agent_reply(
         user_message: str,

@@ -316,7 +316,7 @@ function App() {
         key={sectionKey}
         onClick={() => setSelectedSection({ title, content, key: sectionKey })}
         className={cn(
-          "group h-full rounded-3xl border border-slate-200 dark:border-white/5 bg-slate-200/50 dark:bg-white/[0.03] backdrop-blur-md p-6 transition-all hover:bg-slate-200 dark:hover:bg-white/[0.05] hover:border-primary/30 dark:hover:border-white/10 cursor-pointer hover:shadow-xl hover:shadow-primary/5",
+          "group h-full rounded-3xl border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.03] backdrop-blur-md p-6 transition-all hover:bg-slate-100 dark:hover:bg-white/[0.06] hover:border-primary/50 dark:hover:border-white/20 cursor-pointer hover:shadow-xl hover:shadow-primary/10",
           sectionKey === "overview" ? "md:col-span-2" : ""
         )}
       >
@@ -325,7 +325,7 @@ function App() {
             <div className={cn("p-3 rounded-2xl", colors)}>
               {getSectionIcon(sectionKey)}
             </div>
-            <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-white/50 group-hover:text-slate-700 dark:group-hover:text-white/80 transition-colors">
+            <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-slate-700 dark:text-white/50 group-hover:text-primary dark:group-hover:text-white transition-colors">
               {title.replace(/_/g, " ")}
             </h3>
           </div>
@@ -716,10 +716,10 @@ function App() {
                                 href={source.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 hover:border-primary/30 transition-all group/source"
+                                className="p-4 rounded-2xl bg-white dark:bg-white/[0.04] border border-slate-300 dark:border-white/10 hover:border-primary hover:bg-primary/10 transition-all group/source shadow-sm"
                               >
-                                <p className="text-xs font-bold text-slate-700 dark:text-white/70 line-clamp-1 mb-1 group-hover/source:text-primary transition-colors">{source.title}</p>
-                                <p className="text-[10px] text-slate-400 dark:text-white/20 line-clamp-1 italic">{source.url}</p>
+                                <p className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1 mb-1 group-hover/source:text-primary transition-colors">{source.title}</p>
+                                <p className="text-[10px] text-slate-600 dark:text-white/40 line-clamp-1 italic group-hover/source:text-primary/80">{source.url}</p>
                               </a>
                             ))}
                           </div>
@@ -728,7 +728,7 @@ function App() {
                     </AnimatePresence>
                     
                     <div className="mt-16 pt-8 border-t border-slate-200 dark:border-white/5 flex items-center justify-between">
-                       <div className="flex items-center gap-3 text-slate-400 dark:text-white/20">
+                       <div className="flex items-center gap-3 text-slate-500 dark:text-white/30">
                           <Activity className="w-4 h-4" />
                           <span className="text-[10px] font-black uppercase tracking-[0.2em]">Verified Strategic Data</span>
                        </div>
@@ -737,10 +737,10 @@ function App() {
                          size="sm" 
                          onClick={() => setShowSources(!showSources)}
                          className={cn(
-                           "rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all h-10 px-6",
+                           "rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all h-10 px-6 shadow-sm",
                            showSources 
                              ? "bg-primary text-white border-primary hover:bg-primary/90" 
-                             : "bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-white border-slate-300 dark:border-white/20 hover:bg-slate-200 dark:hover:bg-white/20"
+                             : "bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white border-slate-300 dark:border-white/20 hover:bg-primary hover:text-white hover:border-primary"
                          )}
                        >
                           <ExternalLink className="w-3 h-3 mr-2" />
