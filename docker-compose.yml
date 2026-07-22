@@ -39,13 +39,11 @@ services:
   frontend:
     build:
       context: ./frontend
+      dockerfile: Dockerfile
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "5173:80"
     depends_on:
       backend:
         condition: service_healthy
 
-# Note: Unified structure with backend/ and frontend/ consolidation.
+# Note: Consolidated structure with backend/ (FastAPI) and frontend/ (React Nginx).
