@@ -24,7 +24,7 @@ def create_research_graph():
     workflow.add_node("split", node_split)
     workflow.add_node("complete", node_complete)
     workflow.add_node("merge", node_merge)
-    workflow.add_node("reply", node_reply)
+    workflow.add_node("generate_reply", node_reply)
     workflow.add_node("save", node_save)
     
     # Define Edges as per request:
@@ -42,9 +42,9 @@ def create_research_graph():
     workflow.add_edge("complete", "merge")
     
     # Continue chain: node_merge → node_reply
-    workflow.add_edge("merge", "reply")
+    workflow.add_edge("merge", "generate_reply")
     # node_reply → node_save
-    workflow.add_edge("reply", "save")
+    workflow.add_edge("generate_reply", "save")
     # node_save → END
     workflow.add_edge("save", END)
     
