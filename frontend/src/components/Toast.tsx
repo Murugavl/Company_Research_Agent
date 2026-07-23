@@ -51,10 +51,10 @@ export function Toast({ id, type, message, onRemove }: ToastProps) {
       )}
     >
       <div className="shrink-0 mt-0.5">{getIcon()}</div>
-      <p className="flex-1 text-sm text-white/90">{message}</p>
+      <p className="flex-1 text-sm text-slate-900 dark:text-white/90">{message}</p>
       <button
         onClick={() => onRemove(id)}
-        className="shrink-0 text-white/40 hover:text-white transition-colors"
+        className="shrink-0 text-slate-500 hover:text-slate-900 dark:text-white/40 dark:hover:text-white transition-colors"
       >
         <X className="w-4 h-4" />
       </button>

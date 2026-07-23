@@ -16,14 +16,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Company Research Agent API", lifespan=lifespan)
 
-# Enable CORS for localhost:5173 (Vite default)
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173", 
+        "http://localhost:3000", 
+        "https://company-research-agent-s3ib.onrender.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+def read_root():
+    """Root endpoint."""
+    return {"status": "Company Research Agent API is running", "message": "Welcome!"}
 
 @app.get("/health")
 def health_check():
