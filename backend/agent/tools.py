@@ -217,13 +217,36 @@ async def tavily_search(query: str):
             return {"answer": "", "results": [], "images": []}
 
 async def research_company(company_name: str):
-    query = f"{company_name} company overview products services competitors financials market share employee count locations main branch sub branches global presence"
-    data = await tavily_search(query)
-
+    queries = [
+        f"{company_name} company overview products services market share locations headquarters",
+        f"{company_name} competitors list market competition",
+        f"{company_name} financials revenue profit",
+        f"{company_name} key contacts leadership team CEO executives",
+        f"{company_name} official website URL LinkedIn profile Crunchbase URL"
+    ]
+    
+    tasks = [tavily_search(q) for q in queries]
+    results = await asyncio.gather(*tasks)
+    
+    combined_answer = ""
+    combined_sources = []
+    combined_images = []
+    
+    for res in results:
+        combined_answer += res.get("answer", "") + "\n\n"
+        combined_sources.extend(res.get("results", []))
+        combined_images.extend(res.get("images", []))
+        
+    # Deduplicate sources by URL
+    unique_sources = list({s['url']: s for s in combined_sources if 'url' in s}.values())
+    
+    # Deduplicate images
+    unique_images = list(dict.fromkeys(combined_images))
+    
     return {
-        "raw_answer": data.get("answer", ""),
-        "sources": data.get("results", []),
-        "images": data.get("images", [])
+        "raw_answer": combined_answer.strip(),
+        "sources": unique_sources,
+        "images": unique_images
     }
 
 def _get_empty_sections() -> dict:
