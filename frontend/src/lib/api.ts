@@ -8,7 +8,8 @@ export function generateSessionId(): string {
          Math.random().toString(36).substring(2, 15);
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const rawApiUrl = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
 
 export async function researchCompany(payload: {
   user_message: string;
@@ -18,6 +19,7 @@ export async function researchCompany(payload: {
   current_plan: AccountPlan | null;
 }): Promise<ResearchResponse> {
   // Proxied through Vite in dev, or absolute URL in prod
+  console.log("Fetching research from:", `${API_BASE_URL}/api/research`);
   const response = await fetch(`${API_BASE_URL}/api/research`, {
     method: "POST",
     headers: {
@@ -47,6 +49,7 @@ export async function researchCompanyStream(
   onError: (error: string) => void
 ): Promise<void> {
   try {
+    console.log("Fetching stream from:", `${API_BASE_URL}/api/research/stream`);
     const response = await fetch(`${API_BASE_URL}/api/research/stream`, {
       method: "POST",
       headers: {
