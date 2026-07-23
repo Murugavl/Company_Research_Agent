@@ -280,6 +280,9 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
     if not raw_text or not raw_text.strip():
         return _get_empty_sections()
 
+    # Truncate to prevent context window overflow (max ~3500 tokens)
+    raw_text = raw_text[:14000]
+
     prompt = f"""
     Break the following research text into structured sections for {company_name}.
     Return ONLY a single, valid, compact JSON object (no newlines within string values, no Python-style string concatenation).
@@ -314,6 +317,8 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
 
 async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
     """Independently extract and enrich sections to be run concurrently with split."""
+    # Truncate to prevent context window overflow
+    raw_text = raw_text[:14000]
     prompt = f"""
     Based on the research for {company_name}, perform a deep strategic analysis to fill in any gaps.
     Return ONLY a single, valid, compact JSON object (no newlines within string values, no Python-style string concatenation).
