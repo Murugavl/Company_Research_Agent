@@ -82,3 +82,32 @@ async def test_section_generation_propagates_model_errors(mocker, section_genera
 
     with pytest.raises(RuntimeError, match="configured model is unavailable"):
         await section_generator("Company research source text", "Example Co")
+
+@pytest.mark.parametrize("section_generator", [split_into_sections, complete_missing_sections])
+@pytest.mark.asyncio
+async def test_section_generation_requests_json_object(mocker, section_generator):
+    import json
+
+    sections = {
+        "overview": "Company profile:\n- Example Co.",
+        "products_services": "",
+        "market_position": "",
+        "competitors": "",
+        "financial_snapshot": "",
+        "key_contacts": "",
+        "opportunities": "",
+        "risks": "",
+        "recommended_actions": "",
+        "locations": "",
+    }
+    response = MagicMock()
+    response.choices[0].message.content = json.dumps(sections)
+    create = mocker.patch(
+        "agent.tools.groq_client.chat.completions.create",
+        return_value=response,
+    )
+
+    result = await section_generator("Company research source text", "Example Co")
+
+    assert result["overview"] == sections["overview"]
+    assert create.call_args.kwargs["response_format"] == {"type": "json_object"}

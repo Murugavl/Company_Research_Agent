@@ -327,6 +327,7 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
         response = groq_client.chat.completions.create(
             model=settings.GROQ_MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
             temperature=0.3,
             max_tokens=4000
         )
@@ -365,6 +366,7 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
         response = groq_client.chat.completions.create(
             model=settings.GROQ_MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
             temperature=0.6,
             max_tokens=4000
         )
