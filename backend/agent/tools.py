@@ -329,7 +329,7 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.3,
-            max_tokens=4000
+            max_tokens=8192
         )
         text = response.choices[0].message.content
         parsed = await safe_json_parser(text, PartialPlan)
@@ -368,7 +368,7 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.6,
-            max_tokens=4000
+            max_tokens=8192
         )
         text = response.choices[0].message.content
         parsed = await safe_json_parser(text, PartialPlan)

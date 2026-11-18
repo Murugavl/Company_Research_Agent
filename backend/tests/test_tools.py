@@ -111,3 +111,4 @@ async def test_section_generation_requests_json_object(mocker, section_generator
 
     assert result["overview"] == sections["overview"]
     assert create.call_args.kwargs["response_format"] == {"type": "json_object"}
+    assert create.call_args.kwargs["max_tokens"] == 8192
