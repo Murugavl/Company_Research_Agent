@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str = Field(..., description="API key for Tavily Search")
 
     # Model Settings
-    GROQ_MODEL_NAME: str = Field(default="llama-3.3-70b-versatile")
+    GROQ_MODEL_NAME: str = Field(default="openai/gpt-oss-20b")
 
     # Search Settings
     TAVILY_MAX_RESULTS: int = Field(default=5)

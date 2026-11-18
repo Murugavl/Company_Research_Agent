@@ -95,6 +95,28 @@ class PartialPlan(BaseModel):
     recommended_actions: str = Field(default="")
     locations: str = Field(default="")
 
+CONTENT_STRUCTURE_GUIDE = """
+For every non-empty field, organize facts under bold subheadings, with one to three
+bullets under each heading. Put each heading on its own line. Do not return a flat
+list or a single long paragraph. Use only headings that have supported facts.
+
+Use these section-specific headings:
+- overview: Company profile; Headquarters and footprint; Scale and financials; Market position
+- products_services: Core offerings; Customer segments; Delivery channels
+- market_position: Industry and segments; Competitive standing; Differentiators
+- competitors: Direct competitors; Adjacent competitors; Basis of comparison
+- financial_snapshot: Assets and scale; Revenue and performance; Financial context
+- key_contacts: Executive leadership; Governance; Public contact channels
+- opportunities: Growth opportunities; Strategic rationale
+- risks: Market and competitive risks; Regulatory and operational risks
+- recommended_actions: Near-term priorities; Longer-term priorities
+- locations: Headquarters; Regional presence; International footprint
+
+Every bullet must be concise and factual. Include dates and qualifiers for figures.
+Do not move facts into a heading that does not fit their meaning. If a category is
+not supported by the research, omit that heading rather than guessing.
+"""
+
 def _sanitize_control_chars(text: str) -> str:
     """
     Remove or neutralize control characters that cause JSON parsing failures
@@ -291,8 +313,8 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
     CRITICAL JSON & ACCURACY RULES:
     - Every value MUST be a single JSON string (not an object, not an array, not multiline Python concatenation).
     - Use \\n for line breaks within string values. Do NOT split a string value across multiple quoted lines.
-    - Provide at least 2-3 bullet points or 1 detailed paragraph per section.
-    - Use markdown bullet points (- item) for lists. Bold text for sub-headings (e.g. **Heading**).
+    - Use the required section-specific heading and bullet structure:
+    {CONTENT_STRUCTURE_GUIDE}
     - Never use '#' or markdown headers inside section text.
     - STRICT HONESTY: NEVER output template placeholders such as [insert location], [insert ...], [Location], or bracketed blanks. If location or other information is not specified in the research, state clearly: "Information is not specified for {company_name}."
     - Return ONLY the JSON object. No explanation, no preamble.
@@ -313,7 +335,7 @@ async def split_into_sections(raw_text: str, company_name: str) -> dict:
         return clean_placeholders(parsed, company_name)
     except Exception as e:
         logger.error(f"Error in split_into_sections: {e}")
-        return _get_empty_sections()
+        raise
 
 async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
     """Independently extract and enrich sections to be run concurrently with split."""
@@ -327,8 +349,8 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
     CRITICAL JSON & ACCURACY RULES:
     - Every value MUST be a single JSON string (not an object, not an array, not multiline Python concatenation).
     - Use \\n for line breaks within string values. Do NOT split a string value across multiple quoted lines.
-    - Provide specific names, data points, and strategic insights. At least 2-3 bullet points or 1 detailed paragraph per section.
-    - Use markdown bullet points (- item) for lists. Bold text for sub-headings (e.g. **Heading**).
+    - Use the required section-specific heading and bullet structure:
+    {CONTENT_STRUCTURE_GUIDE}
     - Never use '#' or markdown headers inside section text.
     - STRICT HONESTY: NEVER output template placeholders such as [insert location], [insert ...], [Location], or bracketed blanks. NEVER hallucinate false data for another company. If details for a section are unavailable, state clearly that details are not specified for {company_name}.
     - Return ONLY the JSON object. No explanation, no preamble.
@@ -351,5 +373,5 @@ async def complete_missing_sections(raw_text: str, company_name: str) -> dict:
         return clean_placeholders(parsed, company_name)
     except Exception as e:
         logger.error(f"Error in complete_missing_sections: {e}")
-        return _get_empty_sections()
+        raise
 

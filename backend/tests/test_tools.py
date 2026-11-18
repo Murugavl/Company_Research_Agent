@@ -1,7 +1,12 @@
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
-from agent.tools import safe_json_parser, tavily_search
+from agent.tools import (
+    complete_missing_sections,
+    safe_json_parser,
+    split_into_sections,
+    tavily_search,
+)
 from pydantic import BaseModel
 
 class MockModel(BaseModel):
@@ -66,3 +71,14 @@ async def test_tavily_cache_miss(mocker, mock_redis):
     assert mock_post.call_count == 1
     assert result["answer"] == "new"
     mock_redis.setex.assert_called_once()
+
+@pytest.mark.parametrize("section_generator", [split_into_sections, complete_missing_sections])
+@pytest.mark.asyncio
+async def test_section_generation_propagates_model_errors(mocker, section_generator):
+    mocker.patch(
+        "agent.tools.groq_client.chat.completions.create",
+        side_effect=RuntimeError("configured model is unavailable"),
+    )
+
+    with pytest.raises(RuntimeError, match="configured model is unavailable"):
+        await section_generator("Company research source text", "Example Co")

@@ -67,16 +67,20 @@ export function exportToPDF(plan: AccountPlan, companyName: string): void {
   };
 
   const sectionsHTML = Object.entries(plan)
-    .filter(([key]) => ![
-      "company_name", 
-      "overview", 
-      "company_images", 
-      "session_id", 
-      "id", 
-      "researched_at",
-      "sources",
-      "extra_sections"
-    ].includes(key))
+    .filter(([key, value]) =>
+      ![
+        "company_name",
+        "overview",
+        "company_images",
+        "session_id",
+        "id",
+        "researched_at",
+        "sources",
+        "extra_sections"
+      ].includes(key) &&
+      typeof value === "string" &&
+      value.trim().length > 0
+    )
     .map(([key, value]) => `
       <div class="section">
         <h3>${key.replace(/_/g, " ").toUpperCase()}</h3>
@@ -87,6 +91,7 @@ export function exportToPDF(plan: AccountPlan, companyName: string): void {
   let extraSectionsHTML = "";
   if (plan.extra_sections) {
     extraSectionsHTML = Object.entries(plan.extra_sections)
+      .filter(([, value]) => value.trim().length > 0)
       .map(([key, value]) => `
         <div class="section">
           <h3>${key.replace(/_/g, " ").toUpperCase()}</h3>
@@ -104,10 +109,12 @@ export function exportToPDF(plan: AccountPlan, companyName: string): void {
       <h1>${companyName}</h1>
       <h2>Strategic Intelligence Report</h2>
     </div>
-    <div class="section overview">
-      <h3>EXECUTIVE OVERVIEW</h3>
-      ${formatContent("overview", plan.overview)}
-    </div>
+    ${plan.overview.trim() ? `
+      <div class="section overview">
+        <h3>EXECUTIVE OVERVIEW</h3>
+        ${formatContent("overview", plan.overview)}
+      </div>
+    ` : ""}
     ${sectionsHTML}
     ${extraSectionsHTML}
     <div class="print-footer">

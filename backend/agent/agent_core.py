@@ -22,6 +22,7 @@ Rules:
 - When the user asks to update, modify, or get more details on a specific section, rewrite ONLY that section based on the request and return the updated text.
 - Never use '#' or markdown headers (like #, ##, ###) for any headings. Instead, use bold text (like **Heading Name**) for all headings.
 - Keep the tone concise, clear, and business-focused.
+- Group company facts under bold subheadings with concise bullets instead of one flat list.
 - Never reuse any text from earlier answers.
 - Only talk about the company currently mentioned by the user. NEVER switch context to another company unless explicitly instructed by the user to switch or research a new company.
 - STRICT ACCURACY & NO PLACEHOLDERS: NEVER output template placeholders such as '[insert location]', '[insert ...]', '[Location]', '<insert...>', 'N/A', or bracketed blanks. NEVER invent false information or reference other companies. If information for a requested topic/location is not specified or available for the company, state clearly that it is not publicly specified or available for that company.
@@ -442,9 +443,27 @@ Rules for update:
         
     except Exception as e:
         logger.error(f"Graph execution failed: {e}", exc_info=True)
-        # Fallback to a simple error reply
-        error_reply = "I encountered an error during research. Please try again."
-        return error_reply, current_plan or AccountPlan(company_name=company_name), chat_history, {}
+        raise
+
+def _friendly_research_error(error: Exception, summary_only: bool = False) -> str:
+    status_code = getattr(error, "status_code", None)
+    if status_code == 404:
+        message = (
+            "The configured Groq model is unavailable or not enabled for this account. "
+            "Set GROQ_MODEL_NAME to a model available to your Groq account."
+        )
+    elif status_code == 429:
+        message = "Groq rate limit reached. Wait for the limit to reset before trying again."
+    elif status_code in (401, 403):
+        message = "Groq authentication failed. Verify GROQ_API_KEY in backend/.env."
+    elif "no report content" in str(error).lower():
+        message = "The model returned no report content. Check GROQ_MODEL_NAME and the backend logs."
+    else:
+        message = "Research could not be completed. Check the backend logs for details."
+
+    if summary_only:
+        return f"The report is available, but its chat summary could not be generated. {message}"
+    return message
 
 async def call_groq_stream(prompt: str):
     """Async generator to stream tokens from Groq."""
@@ -529,11 +548,7 @@ Rules for update:
                     yield {"type": "token", "content": token}
             except Exception as e:
                 logger.error(f"Rapid update streaming failed: {e}")
-                error_msg = str(e)
-                friendly_error = "I encountered a temporary service interruption while updating the section. Please try again."
-                if "429" in error_msg:
-                    friendly_error = "Rate limit reached. Please wait a moment before trying again."
-                yield {"type": "token", "content": friendly_error}
+                yield {"type": "error", "message": _friendly_research_error(e)}
                 return
         
         # Update the plan object
@@ -612,6 +627,13 @@ Rules for update:
         
         s_merge = await node_merge(initial_state)
         initial_state.update(s_merge)
+        section_keys = (
+            "overview", "products_services", "market_position", "competitors",
+            "financial_snapshot", "key_contacts", "opportunities", "risks",
+            "recommended_actions", "locations",
+        )
+        if not any(str(initial_state["final_sections"].get(key, "")).strip() for key in section_keys):
+            raise RuntimeError("The model returned no report content.")
         
         # Now stream the reply using only the Executive Overview section to prevent 413 TPM overflow
         overview_text = initial_state["final_sections"].get("overview", "")
@@ -631,12 +653,9 @@ Answer naturally and professionally based on the research.
                 yield {"type": "token", "content": token}
         except Exception as e:
             logger.error(f"Reply streaming failed: {e}")
-            error_msg = str(e)
-            friendly_error = "Intelligence gathered successfully. The canvas on the right has been updated. (Note: The text summary hit a temporary rate limit.)"
-            if "429" in error_msg:
-                friendly_error = f"Intelligence gathered successfully on {initial_state['company_name']}! The canvas on the right has been updated with the latest research. (Note: The natural language summary hit a temporary Groq rate limit, but your core plan data is ready.)"
-            yield {"type": "token", "content": friendly_error}
-            full_reply = friendly_error
+            summary_error = _friendly_research_error(e, summary_only=True)
+            yield {"type": "error", "message": summary_error}
+            full_reply = summary_error
             
         initial_state["reply"] = full_reply.strip()
         
@@ -678,9 +697,5 @@ Answer naturally and professionally based on the research.
 
     except Exception as e:
         logger.error(f"Streaming research failed: {e}", exc_info=True)
-        error_msg = str(e)
-        friendly_error = "The strategic engine is currently experiencing high volume. Please wait a moment and try again."
-        if "429" in error_msg:
-            friendly_error = "Intelligence rate limit reached. Please pause for 60 seconds before initiating a new scan."
-        yield {"type": "token", "content": friendly_error}
+        yield {"type": "error", "message": _friendly_research_error(e)}
 

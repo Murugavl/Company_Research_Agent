@@ -27,7 +27,11 @@ MANIFEST
 venv/
 env/
 .venv/
-.env/
+
+# Environment files
+.env
+.env.*
+!.env.example
 
 # IDEs
 .idea/
